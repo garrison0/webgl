@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tiny WebGL transform feedback particles</title>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: monospace;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <script src="index.js"></script>
+  <script type="module">
+    import * as twgl from './node_modules/twgl.js/dist/4.x/twgl-full.module.js';
+    const gl = document.querySelector("#c").getContext("webgl2");
+    const programInfo = twgl.createProgramInfo(gl, [vs, fs]);
+    const postProgramInfo = twgl.createProgramInfo(gl, [p_vs, p_fs]);
+
+    const arrays = {
+      position: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
+    };
+    const bufferInfo = twgl.createBufferInfoFromArrays(gl, arrays);
+
+    var mouse_pos = [0.5, 0.5];
+
+    document.onmousemove = (event) => { 
+      mouse_pos = [event.pageX / gl.canvas.width, 1 - event.pageY / gl.canvas.height];
+    }
+
+    var postBufferInfo = twgl.primitives.createXYQuadBufferInfo(gl);
+    
+    const targetTextureWidth = gl.canvas.clientWidth;
+    const targetTextureHeight = gl.canvas.clientHeight;
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    
+    const level = 0;
+    const internalFormat = gl.RGBA;
+    const border = 0;
+    const format = gl.RGBA;
+    const type = gl.UNSIGNED_BYTE;
+    const data = null;
+    gl.texImage2D(gl.TEXTURE_2D, level, internalFormat,
+                  targetTextureWidth, targetTextureHeight, border,
+                  format, type, data);
+
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    // make fb to render to this texture
+    const attachments = [
+      { format: gl.RGBA, mag: gl.NEAREST },
+    ]
+    var fbi = twgl.createFramebufferInfo(gl, attachments, targetTextureWidth, targetTextureWidth);
+
+    twgl.bindFramebufferInfo(gl, fbi)
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+
+    // now unbind
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    function render(time) {
+      twgl.resizeCanvasToDisplaySize(gl.canvas);
+      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+      const uniforms = {
+        time: time * 0.001,
+        resolution: [gl.canvas.width, gl.canvas.height],
+        mouse_pos: mouse_pos,
+      };
+
+      const postUniforms = {
+        texture: texture
+      }
+
+      // RENDER TO TEXTURE
+      gl.useProgram(programInfo.program);
+      twgl.bindFramebufferInfo(gl, fbi)
+      gl.viewport(0, 0, fbi.width, fbi.height);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.clearColor(0,0,0,1); 
+
+      twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
+      twgl.setUniforms(programInfo, uniforms);
+      twgl.drawBufferInfo(gl, bufferInfo);
+
+      // RENDER TEXTURE TO QUAD
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+      gl.useProgram(postProgramInfo.program);
+
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.clearColor(0,0,0, 1); 
+
+      twgl.setBuffersAndAttributes(gl, postProgramInfo, postBufferInfo); 
+      twgl.setUniforms(postProgramInfo, postUniforms);
+      twgl.drawBufferInfo(gl, postBufferInfo);
+
+      requestAnimationFrame(render);
+    }
+    requestAnimationFrame(render);
+  </script>
+</body>
+</html>
