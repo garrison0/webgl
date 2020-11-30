@@ -113,13 +113,13 @@ void main() {
     v_Life = i_Life;
 
     rand = rand * 2.0 - vec2(1.0);
-    // vec2 force = 0.4 * (rand.r * texture(u_ForceField, i_Position) - vec4(rand.g) * texture(u_ForceField, i_Position) * i_Age).rg;
-    vec2 force = 2.5 * (texture(u_ForceField, i_Position) - vec4(0.47)).rg;
+    vec2 force = 0.9 * (4.25 * texture(u_ForceField, i_Position) - 1.0 * texture(u_ForceField, i_Position) * i_Age).rg - vec2(sin(i_Life * 0.5), cos(i_Life * 0.5));
+    // vec2 force = 1.5 * (texture(u_ForceField, i_Position) - vec4(0.5)).rg;
     force = 0.5 * (force - 0.5 * vec2(rand.r)); 
     v_Velocity = i_Velocity + force * u_TimeDelta;
 
     if (length(v_Velocity) > u_MaxSpeed) { 
-      v_Velocity = v_Velocity * 0.95;
+      v_Velocity = v_Velocity * 0.8;
     }
   }
 }
@@ -151,7 +151,7 @@ void main() {
   v_Age = i_Age;
   v_Life = i_Life;
 
-  gl_PointSize = 1.0 + 1.0 * (1.0 - i_Age/i_Life);
+  gl_PointSize = 1.0 + 3.0 * (1.0 - i_Age/i_Life);
   gl_Position = vec4(i_Position, 0.0, 1.0);
 }
 `
@@ -214,12 +214,14 @@ vec4 gaussianBlur(sampler2D u_Texture, vec2 uv) {
   {     
     vec4 tmp = vec4(0.0);
     if (u_horizontal) { 
-      tmp = texture( u_Texture,  uv + vec2(u_offsets[i], 0.0) );   
+      tmp = texture( u_Texture,  uv + vec2(u_offsets[i], 0.0) );  
+      sum += tmp * u_kernel[i] / u_kernelWeight;  
     }                                          
     else { 
-      tmp = texture( u_Texture,  uv + vec2(0.0, u_offsets[i]) ); 
+      tmp = texture( u_Texture,  uv + vec2(0.0, u_offsets[i]) );
+      sum += tmp * u_kernel[i] / u_kernelWeight;  
     }
-    sum += tmp * u_kernel[i] / 4.0; 
+    
     // sum += tmp * u_kernel[i] / (u_kernelWeight / 1000.0);               
   }
   return sum;                                                  
@@ -232,27 +234,7 @@ float stepping(float t){
 
 void main() {
   vec4 color = gaussianBlur(u_Texture, v_texCoord);
-
-  vec4 fragColor = vec4(0);
-  vec2 uv = v_texCoord;
-  float iTime = 0.04;
-  for(int i=0;i<12;i++){
-      float t = iTime + float(i)*3.141592/12.*(5.+1.*stepping(sin(iTime*3.)));
-      vec2 p = vec2(cos(t),sin(t));
-      p *= cos(iTime + float(i)*3.141592*cos(iTime/8.));
-      vec3 col = cos(vec3(0,1,-1)*3.141592*2./3.+3.141925*(iTime/2.+float(i)/5.)) * 0.4;
-      fragColor += vec4(0.01/length(uv-p*0.9)*col,1.0);
-  }
-  fragColor.xyz = pow(fragColor.xyz,vec3(3.));
-  fragColor.w = 0.05;
-
-  o_FragColor = color + vec4(0,0,0.01,0) + 0.01 * fragColor;
-
-  // o_FragColor = min(vec4(1.0), color);
-  // o_FragColor = min(vec4(1.0), fragColor + color);
-  // vec3 brightened = color.rgb * 1.1;
-  // o_FragColor = vec4(brightened, max(1.0, color.a * 1.2));
-  // o_FragColor = vec4(texture(u_Texture, v_texCoord).rgb, 1.0);
+  o_FragColor = min(vec4(1.0), color);
 }
 `
 
@@ -268,9 +250,38 @@ in vec2 v_texCoord;
 out vec4 o_FragColor;
 
 void main() {
-  // o_FragColor = texture(u_Third, v_texCoord);
-  // vec2 onePixel = vec2(1) / vec2(textureSize(u_Second, 0));
-  // o_FragColor = texture(u_First, v_texCoord);
-  o_FragColor = 1.0 * texture(u_First, v_texCoord) + 1.0 * texture(u_Second, v_texCoord) + 1.0 * texture(u_Third, v_texCoord);
+  vec4 firColor = texture(u_First, v_texCoord);
+  vec4 secColor = texture(u_Second, v_texCoord);
+  vec4 thirdCol = texture(u_Third, v_texCoord);
+
+  // make the 'atmosphere' more blue
+  thirdCol.rgb /= thirdCol.a;
+  thirdCol.rgb += vec3(0.02,0.02,0.4);
+  thirdCol.rgb *= thirdCol.a;
+
+  secColor.rgb /= secColor.a;
+  secColor.rgb += vec3(0.02,0.02,0.06);
+  secColor.rgb *= secColor.a;
+
+  // modify color of non-blurred texture
+  firColor.rgb /= firColor.a;
+  firColor.rgb = ((firColor.rgb - 0.55) * 1.75) + 0.55;
+  firColor.rgb -= vec3(-0.23, 0.055, 0.17) / 1.2;
+  firColor.rgb *= firColor.a;
+  vec4 col = vec4(0);
+
+  // perceived luminance = (0.299*R + 0.587*G + 0.114*B)
+  if (firColor.r * 0.299 + firColor.g * 0.587 + firColor.b * 0.114 > 0.25) { 
+    col += 0.35 * firColor;
+    col += 0.31 * secColor;
+    col += 0.3 * thirdCol;
+    // col *= 0.98;
+  } else { 
+    col += 0.7 * thirdCol;
+    col += 0.125 * secColor;
+    col += 0.375 * firColor;
+  }
+
+  o_FragColor = min(vec4(1.0), col);
 }
 `

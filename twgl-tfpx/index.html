@@ -37,8 +37,10 @@
     // state globals
     const min_age = 4.0;
     const max_age = 20.0;
-    const num_particles = 10000;
+    // const num_particles = 10000;
     // const num_particles = 150000;
+    // const num_particles = 2000000;
+    const num_particles = 1000000;
     var born_particles = 0.0;
     var old_timestamp = 0.0;
     var total_time = 0.0;
@@ -62,7 +64,7 @@
     var write_buffers;
     var kernel = [];
     var offsets = [];
-    var kernel_weight;
+    var kernel_weight = 0;
 
     function createEmptyTexture(targetTextureWidth, targetTextureHeight) {
       let texture = gl.createTexture();
@@ -111,7 +113,7 @@
 
       // kernel for gaussian blur
       var center = Math.floor(kernel_size / 2);
-      var sigma = 5.0;
+      var sigma = 100;
       var onepx = {x: 1 / gl.canvas.clientWidth, y: 1 / gl.canvas.clientHeight};
       for(i = 0; i <= center; ++i)
       {
@@ -161,21 +163,21 @@
       gl.texImage2D(gl.TEXTURE_2D,
                     0, 
                     gl.RG8,
-                    512, 512,
+                    1024, 1024,
                     0,
                     gl.RG,
                     gl.UNSIGNED_BYTE,
-                    randomRGData(512, 512));
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+                    randomRGData(1024, 1024));
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
       forcefield_texture = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, forcefield_texture);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB8, gl.RGB, gl.UNSIGNED_BYTE, force_field_image);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLIP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLIP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     
@@ -227,10 +229,10 @@
         u_MaxTheta: 2 * Math.PI,
         u_Origin: mouse_pos,
         u_Gravity: [-0.25, -0.61],
-        u_TimeDelta: 0.005,
+        u_TimeDelta: 0.0025,
         u_RgNoise: rg_noise_texture,
         u_ForceField: forcefield_texture,
-        u_Screen: [gl.canvas.width, gl.canvas.height]
+        u_Screen: [gl.canvas.clientWidth, gl.canvas.clientHeight]
       };
 
       var postUniforms = (sampleTexture, horizontal) => {
@@ -383,7 +385,7 @@
     }
     
     var force_field_image = new Image();
-    force_field_image.src = './assets/rgperlin.png';
+    force_field_image.src = './assets/rgperlin2.png';
     force_field_image.onload = function () {
       init(force_field_image)
     }
