@@ -5,6 +5,7 @@ precision highp float;
 /* Number of seconds (possibly fractional) that has passed since the last
    update step. */
 uniform float u_TimeDelta;
+uniform float u_Time;
 
 /* A texture with just 2 channels (red and green), filled with random values.
    This is needed to assign a random direction to newly born particles. */
@@ -54,6 +55,37 @@ out float v_Age;
 out float v_Life;
 out vec2 v_Velocity;
 
+// Simplex 2D noise
+//
+vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
+
+float snoise(vec2 v){
+  const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+           -0.577350269189626, 0.024390243902439);
+  vec2 i  = floor(v + dot(v, C.yy) );
+  vec2 x0 = v -   i + dot(i, C.xx);
+  vec2 i1;
+  i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+  vec4 x12 = x0.xyxy + C.xxzz;
+  x12.xy -= i1;
+  i = mod(i, 289.0);
+  vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
+  + i.x + vec3(0.0, i1.x, 1.0 ));
+  vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy),
+    dot(x12.zw,x12.zw)), 0.0);
+  m = m*m ;
+  m = m*m ;
+  vec3 x = 2.0 * fract(p * C.www) - 1.0;
+  vec3 h = abs(x) - 0.5;
+  vec3 ox = floor(x + 0.5);
+  vec3 a0 = x - ox;
+  m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+  vec3 g;
+  g.x  = a0.x  * x0.x  + h.x  * x0.y;
+  g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+  return 130.0 * dot(m, g);
+}
+
 void main() {
   /* First, choose where to sample the random texture. I do it here
       based on particle ID. It means that basically, you're going to
@@ -61,7 +93,7 @@ void main() {
       still looks good. I suppose you could get fancier, and sample
       based on particle ID *and* time, or even have a texture where values
       are not-so-random, to control the pattern of generation. */
-  ivec2 noise_coord = ivec2(gl_VertexID % 512, gl_VertexID / 512);
+  ivec2 noise_coord = ivec2(gl_VertexID % 1024, gl_VertexID / 1024);
   
   /* Get the pair of random values. */
   vec2 rand = texelFetch(u_RgNoise, noise_coord, 0).rg;
@@ -113,9 +145,24 @@ void main() {
     v_Life = i_Life;
 
     rand = rand * 2.0 - vec2(1.0);
-    vec2 force = 0.9 * (4.25 * texture(u_ForceField, i_Position) - 1.0 * texture(u_ForceField, i_Position) * i_Age).rg - vec2(sin(i_Life * 0.5), cos(i_Life * 0.5));
+    vec2 force = vec2(0);
+    if (i_Age < 2.0) { 
+      force = 2.5 * (texture(u_ForceField, i_Position) - i_Age * vec4(0.5)).rg;
+    } else { 
+      if ( u_Time < 10000.0 ) { 
+        force = 1.5 * (texture(u_ForceField, i_Position) - vec4(1.0, -1.0,0,0)).rg;
+        // force = snoise(v_Position) * vec2(1.0);
+      }
+      else { 
+        force = snoise(v_Position) * (0.5 * vec2(-1.0, 1.0) + 0.5 * vec2(sin());
+        // force = 3.5 * (texture(u_ForceField, i_Position).rg - i_Age * vec2(0.0, 1.0)).rg;
+      }
+    }
+    
+    // force += vec2(sin(i_Age), cos(i_Age))
+    // this is the old center-y line one
     // vec2 force = 1.5 * (texture(u_ForceField, i_Position) - vec4(0.5)).rg;
-    force = 0.5 * (force - 0.5 * vec2(rand.r)); 
+    // force = 0.5 * (force - 0.5 * vec2(rand.r)); 
     v_Velocity = i_Velocity + force * u_TimeDelta;
 
     if (length(v_Velocity) > u_MaxSpeed) { 

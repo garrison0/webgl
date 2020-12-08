@@ -230,6 +230,7 @@
         u_Origin: mouse_pos,
         u_Gravity: [-0.25, -0.61],
         u_TimeDelta: 0.0025,
+        u_Time: total_time,
         u_RgNoise: rg_noise_texture,
         u_ForceField: forcefield_texture,
         u_Screen: [gl.canvas.clientWidth, gl.canvas.clientHeight]
@@ -291,6 +292,7 @@
           /* ignore large deltas */
           time_delta = 0.0;
         }
+        total_time += time_delta;
       }
 
       old_timestamp = time;
