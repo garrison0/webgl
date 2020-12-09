@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tiny WebGL transform feedback particles</title>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: monospace;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <script src="index.js"></script>
+  <script type="module">
+    import * as twgl from './node_modules/twgl.js/dist/4.x/twgl-full.module.js';
+
+    function randomRGData(size_x, size_y) {
+      var d = [];
+      for (var i = 0; i < size_x * size_y; ++i) {
+        d.push(Math.random() * 255.0);
+        d.push(Math.random() * 255.0);
+      }
+      return new Uint8Array(d);
+    }
+
+    // will set to true when video can be copied to texture
+    var copyVideo = false;
+
+    function setupVideo(url) {
+      const video = document.createElement('video');
+
+      var playing = false;
+      var timeupdate = false;
+
+      video.autoplay = true;
+      video.muted = true;
+      video.loop = true;
+
+      // Waiting for these 2 events ensures
+      // there is data in the video
+
+      video.addEventListener('playing', function() {
+        playing = true;
+        checkReady();
+      }, true);
+
+      video.addEventListener('timeupdate', function() {
+        timeupdate = true;
+        checkReady();
+      }, true);
+
+      video.src = url;
+      video.play();
+
+      function checkReady() {
+        if (playing && timeupdate) {
+          copyVideo = true;
+        }
+      }
+
+      return video;
+    }
+
+    // update a texture with current frame from a playing video
+    function updateTexture(gl, texture, video) {
+      const level = 0;
+      const internalFormat = gl.RGBA;
+      const srcFormat = gl.RGBA;
+      const srcType = gl.UNSIGNED_BYTE;
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texImage2D(gl.TEXTURE_2D, level, internalFormat,
+                    srcFormat, srcType, video);
+    }
+
+    const gl = document.querySelector("#c").getContext("webgl2");
+
+    // state globals
+    // const min_age = 4.0;
+    // const max_age = 20.0;
+    const BOX_SIZE = 16;
+    const num_particles = Math.floor(gl.canvas.clientWidth * gl.canvas.clientHeight / BOX_SIZE);
+    // const num_particles = 150000;
+    // var born_particles = 0.0;
+    var old_timestamp = 0.0;
+    var total_time = 0.0;
+    var time_delta = 0.0;
+    // var kernel_size = 49;
+
+    var programInfo;
+    // var feedbackProgramInfo;
+    // var postProcessingProgramInfo;
+    var finalRenderProgramInfo;
+    var postBufferInfo;
+    // var rg_noise_texture;
+    // var forcefield_texture;
+    var imageGradX_fbi;
+    var imageGradY_fbi;
+    var difference_fbi;
+    var texture;
+    var imageGradX_texture;
+    var imageGradY_texture;
+    var difference_texture;
+
+    // var texture2;
+    // var texture3;
+    // var read_buffers;
+    // var write_buffers;
+    // var kernel = [];
+    // var offsets = [];
+    // var kernel_weight;
+    var video;
+
+    function createEmptyTexture(targetTextureWidth, targetTextureHeight) {
+      let texture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      
+      const level = 0;
+      const internalFormat = gl.RGBA;
+      const border = 0;
+      const format = gl.RGBA;
+      const type = gl.UNSIGNED_BYTE;
+      const data = null;
+      gl.texImage2D(gl.TEXTURE_2D, level, internalFormat,
+                    targetTextureWidth, targetTextureHeight, border,
+                    format, type, data);
+
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      return texture;
+    }
+
+    function init(forcefield_image) {
+      // feedbackProgramInfo = twgl.createProgramInfo(gl, [tf_vs, tf_fs], { 
+      //   transformFeedbackVaryings: 
+      //     [
+      //       "v_Position",
+      //       "v_Age",
+      //       "v_Life",
+      //       "v_Velocity"
+      //     ]
+      // });
+
+      // rendering program
+      programInfo = twgl.createProgramInfo(gl, [flipped_vs, n_fs]);
+
+      // postProcessingProgramInfo = twgl.createProgramInfo(gl, [p_vs, p_fs]);
+
+      finalRenderProgramInfo = twgl.createProgramInfo(gl, [default_vs, combine_fs]);
+
+      // make initial particle data
+      var initial_velocities = [];
+      var initial_positions = [];
+      var initial_sizes = [];
+
+      // kernel for gaussian blur
+      // var center = Math.floor(kernel_size / 2);
+      // var sigma = 5.0;
+      // var onepx = {x: 1 / gl.canvas.clientWidth, y: 1 / gl.canvas.clientHeight};
+      // for(i = 0; i <= center; ++i)
+      // {
+      //     var result        = Math.exp(-(i*i)/(2*sigma*sigma));
+      //     kernel[center+i]  = result;
+      //     kernel[center-i]  = result;
+      //     offsets[center+i] = -onepx.y * i;
+      //     offsets[center-i] = onepx.y * i;
+      //     kernel_weight    += result;
+      //     if(i !== 0) {
+      //       kernel_weight += result;
+      //     }
+      // } 
+
+      for (var i = 0; i < num_particles; i++) {
+        initial_velocities.push(0.0);
+        initial_velocities.push(0.0);
+        initial_positions.push( ( (i * BOX_SIZE) % gl.canvas.clientWidth ) / gl.canvas.clientWidth ); // x in clip-space
+        initial_positions.push( Math.floor( i * BOX_SIZE  / gl.canvas.clientWidth ) * BOX_SIZE / gl.canvas.clientHeight ); // y in clip-space
+        initial_sizes.push(BOX_SIZE);
+      }
+
+      initial_positions = new Float32Array(initial_positions);
+      initial_velocities = new Float32Array(initial_velocities);
+
+      // 1 buffer for each attribute
+      // read_buffers = {
+      //   "position": twgl.createBufferFromTypedArray(gl, initial_positions),
+      //   "velocity": twgl.createBufferFromTypedArray(gl, initial_velocities),
+      //   "life": twgl.createBufferFromTypedArray(gl, initial_lives),
+      //   "age": twgl.createBufferFromTypedArray(gl, initial_ages)
+      // }
+
+      // write_buffers = {
+      //   "position": twgl.createBufferFromTypedArray(gl, initial_positions),
+      //   "velocity": twgl.createBufferFromTypedArray(gl, initial_velocities),
+      //   "life": twgl.createBufferFromTypedArray(gl, initial_lives),
+      //   "age": twgl.createBufferFromTypedArray(gl, initial_ages)
+      // }
+
+      // rg_noise_texture = gl.createTexture();
+      // gl.bindTexture(gl.TEXTURE_2D, rg_noise_texture);
+      // gl.texImage2D(gl.TEXTURE_2D,
+      //               0, 
+      //               gl.RG8,
+      //               512, 512,
+      //               0,
+      //               gl.RG,
+      //               gl.UNSIGNED_BYTE,
+      //               randomRGData(512, 512));
+      // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+      // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+      // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+      // forcefield_texture = gl.createTexture();
+      // gl.bindTexture(gl.TEXTURE_2D, forcefield_texture);
+      // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB8, gl.RGB, gl.UNSIGNED_BYTE, force_field_image);
+      // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    
+      const targetTextureWidth = gl.canvas.clientWidth;
+      const targetTextureHeight = gl.canvas.clientHeight;
+      texture = createEmptyTexture(targetTextureWidth, targetTextureWidth);
+      imageGradX_texture = createEmptyTexture(targetTextureWidth, targetTextureHeight);
+      imageGradY_texture = createEmptyTexture(targetTextureWidth, targetTextureHeight);
+      difference_texture = createEmptyTexture(targetTextureWidth, targetTextureHeight);
+
+      // make fb to render to these textures
+      const attachments = [
+        { format: gl.RGBA, mag: gl.NEAREST },
+      ]
+      imageGradX_fbi = twgl.createFramebufferInfo(gl, attachments, targetTextureWidth, targetTextureWidth);
+      twgl.bindFramebufferInfo(gl, imageGradX_fbi)
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, imageGradX_texture, 0);
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      imageGradY_fbi = twgl.createFramebufferInfo(gl, attachments, targetTextureWidth, targetTextureWidth);
+      twgl.bindFramebufferInfo(gl, imageGradY_fbi)
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, imageGradY_texture, 0);
+      
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      difference_fbi = twgl.createFramebufferInfo(gl, attachments, targetTextureWidth, targetTextureWidth);
+      twgl.bindFramebufferInfo(gl, difference_fbi)
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, imageGradY_texture, 0);
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+      postBufferInfo = twgl.primitives.createXYQuadBufferInfo(gl);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+
+      video = setupVideo('assets/baaltshuvah.mp4');
+
+      // start rendering
+      requestAnimationFrame(render);
+    }
+    
+    var mouse_pos = [0.5, 0.5];
+
+    document.onmousemove = (event) => { 
+      mouse_pos = [event.pageX / gl.canvas.width, 1 - event.pageY / gl.canvas.height];
+    }
+
+    function render(time) {
+      const uniforms = (isVerticle) => { return { 
+        u_Texture: texture,
+        u_screen: [gl.canvas.clientWidth, gl.canvas.clientHeight],
+        u_offsets: [-1, -1, 
+                    0, -1,
+                    1, -1,
+                    -1, 0,
+                    0, 0,
+                    1, 0
+                    -1, 1,
+                    0, 1,
+                    1, 1],
+        u_sobelX: [47, 0, -47,
+                  162, 0, -162,
+                  47,  0, -47],
+        u_sobelY: [47,  162,  47,
+                   0,   0,    0,
+                   -47, -162, -47],
+        u_isVerticle: isVerticle
+      } };
+
+      // const uniforms = {
+      //   u_MinSpeed: 0.0,
+      //   u_MaxSpeed: 0.15,
+      //   u_MinTheta: 0,
+      //   u_MaxTheta: 2 * Math.PI,
+      //   u_Origin: mouse_pos,
+      //   u_Gravity: [-0.25, -0.61],
+      //   u_TimeDelta: 0.005,
+      //   u_RgNoise: rg_noise_texture,
+      //   u_ForceField: forcefield_texture,
+      //   u_Screen: [gl.canvas.width, gl.canvas.height]
+      // };
+
+      // var postUniforms = (sampleTexture, horizontal) => {
+      //   return { 
+      //     u_Texture: sampleTexture,
+      //     u_Time: time,
+      //     u_kernel: kernel,
+      //     u_offsets: offsets,
+      //     u_kernelWeight: kernel_weight,
+      //     u_kernelSize: kernel_size,
+      //     u_horizontal: horizontal
+      //   }
+      // };
+
+      var finalRenderUniforms = {
+        u_First: imageGradX_texture,
+        u_Second: imageGradY_texture
+      }
+
+      // rendering program READ info
+      // var bufferInfoRender = {
+      //   numElements: num_particles,
+      //   attribs: {
+      //     i_Position: { buffer: read_buffers["position"], numComponents: 2 },
+      //     i_Age:    { buffer: read_buffers["age"], numComponents: 1 }, 
+      //     i_Life: { buffer: read_buffers["life"], numComponents: 1 }
+      //   },
+      // };
+
+      // // write program READ info
+      // var bufferInfoWriteRead = {
+      //   numElements: num_particles,
+      //   attribs: {
+      //     i_Position: { buffer: read_buffers["position"], numComponents: 2 },
+      //     i_Age:    { buffer: read_buffers["age"], numComponents: 1 }, 
+      //     i_Life: { buffer: read_buffers["life"], numComponents: 1 },
+      //     i_Velocity: { buffer: read_buffers["velocity"], numComponents: 2 }
+      //   },
+      // };
+
+      // // write buffer WRITE
+      // var bufferInfoWrite = {
+      //   numElements: num_particles,
+      //   attribs: {
+      //     v_Position: { buffer: write_buffers["position"], numComponents: 2 },
+      //     v_Age:    { buffer: write_buffers["age"], numComponents: 1 }, 
+      //     v_Life: { buffer: write_buffers["life"], numComponents: 1 },
+      //     v_Velocity: { buffer: write_buffers["velocity"], numComponents: 2 }
+      //   }
+      // }
+
+      if (old_timestamp != 0) {
+        time_delta = time - old_timestamp;
+        if (time_delta > 500.0) {
+          /* ignore large deltas */
+          time_delta = 0.0;
+        }
+      }
+
+      old_timestamp = time;
+
+      twgl.resizeCanvasToDisplaySize(gl.canvas);
+
+      if (copyVideo) {
+        updateTexture(gl, texture, video);
+      }
+
+      // ////////// RENDER -- TRANSFORM FEEDBACK //////////
+      // gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      // gl.viewport(0, 0, gl.canvas.clientWidth, gl.canvas.clientHeight);
+
+      // // bind the 'write' buffer as TF
+      // const tf = twgl.createTransformFeedback(gl, feedbackProgramInfo, bufferInfoWrite); 
+
+      // twgl.setBuffersAndAttributes(gl, feedbackProgramInfo, bufferInfoWriteRead);
+
+      // gl.enable(gl.RASTERIZER_DISCARD);
+
+      // gl.useProgram(feedbackProgramInfo.program);
+      // gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, tf);
+      // gl.beginTransformFeedback(gl.POINTS);
+      // twgl.setUniforms(feedbackProgramInfo, uniforms);
+      // twgl.drawBufferInfo(gl, bufferInfoWriteRead, gl.POINTS);
+      // gl.endTransformFeedback();
+      // gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+
+      // gl.disable(gl.RASTERIZER_DISCARD);
+
+      // ////////// RENDER -- TO FRAMEBUFFER(s) //////////
+      // make image gradient textures
+
+      // x
+      gl.useProgram(programInfo.program);
+      twgl.bindFramebufferInfo(gl, imageGradX_fbi);
+      gl.viewport(0, 0, gl.canvas.clientWidth, gl.canvas.clientHeight);
+
+      // // send result to framebuffer texture
+      gl.bindTexture(gl.TEXTURE_2D, imageGradX_texture);
+      
+      gl.clearColor(0.0,0.0,0.0,1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      twgl.setUniforms(programInfo, uniforms(false));
+      twgl.setBuffersAndAttributes(gl, programInfo, postBufferInfo); 
+      
+      twgl.drawBufferInfo(gl, postBufferInfo, gl.TRIANGLES);
+
+      // y
+      twgl.bindFramebufferInfo(gl, imageGradY_fbi);
+      gl.viewport(0, 0, gl.canvas.clientWidth, gl.canvas.clientHeight);
+
+      gl.bindTexture(gl.TEXTURE_2D, imageGradY_texture);
+
+      gl.clearColor(0.0,0.0,0.0,1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      twgl.setUniforms(programInfo, uniforms(true));
+
+      twgl.drawBufferInfo(gl, postBufferInfo, gl.TRIANGLES);
+
+      // value + difference
+      // tba - need buffer of frames!
+      
+      // ////////// RENDER -- POSTPROCESSING (ping pong between textures 2 and 3) //////////
+      // gl.useProgram(postProcessingProgramInfo.program);
+      // twgl.bindFramebufferInfo(gl, fbi2);
+      // gl.viewport(0, 0, gl.canvas.clientWidth, gl.canvas.clientHeight);
+
+      // gl.bindTexture(gl.TEXTURE_2D, texture2);
+
+      // gl.clearColor(0.01,0.01,0.01, 1); 
+      // gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      // twgl.setUniforms(postProcessingProgramInfo, postUniforms(texture, false));
+      // twgl.setBuffersAndAttributes(gl, postProcessingProgramInfo, postBufferInfo); 
+      
+      // twgl.drawBufferInfo(gl, postBufferInfo, gl.TRIANGLES);
+
+      // twgl.bindFramebufferInfo(gl, fbi3);
+      
+      // gl.bindTexture(gl.TEXTURE_2D, texture3);
+
+      // gl.clearColor(0.01,0.01,0.01, 1); 
+      // gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      // twgl.setUniforms(postProcessingProgramInfo, postUniforms(texture2, true));
+      // twgl.setBuffersAndAttributes(gl, postProcessingProgramInfo, postBufferInfo); 
+      
+      // twgl.drawBufferInfo(gl, postBufferInfo, gl.TRIANGLES);
+
+      ////////// RENDER -- TO CANVAS
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, gl.canvas.clientWidth, gl.canvas.clientHeight);
+
+      gl.useProgram(finalRenderProgramInfo.program);
+
+      gl.clearColor(0.0,0.0,0.0, 1); 
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      twgl.setUniforms(finalRenderProgramInfo, finalRenderUniforms);
+      twgl.setBuffersAndAttributes(gl, finalRenderProgramInfo, postBufferInfo); 
+      
+      twgl.drawBufferInfo(gl, postBufferInfo, gl.TRIANGLES);
+
+      // now swap
+      // var temp = read_buffers;
+      // read_buffers = write_buffers;
+      // write_buffers = temp;
+
+      requestAnimationFrame(render);
+    }
+    
+    var force_field_image = new Image();
+    force_field_image.src = './assets/rgperlin.png';
+    force_field_image.onload = function () {
+      init(force_field_image)
+    }
+  </script>
+</body>
+</html>
