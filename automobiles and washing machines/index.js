@@ -52,14 +52,20 @@ void main() {
   vPUv = vec2(puv.x, -puv.y);
 
   vec2 displacement = vec2(0.0);
-  displacement += vec2(rand(sin(u_Time) * vPUv * 0.45 - 0.5) / 20.0 + (snoise(vPUv) - 0.1) / 1.0, snoise(vPUv + sin(u_Time / 10.0) / 100.0) - 0.5) * cos(u_Time / 10.0) / (sin(u_Time * 2.5) * 100.0);
+  displacement += vec2(
+    rand(sin(u_Time) * vPUv * 0.45 - 0.5) / 20.0 + (snoise(vPUv) - 0.1) / 1.0, 
+    snoise( 
+      (vPUv / (sin(u_Time / 1.2) * 2.0)) + sin(u_Time / 1.0) / 100.0)
+       - 0.5);
+  displacement *= 0.05 * cos(u_Time * 1.5) / sin(u_Time * 1.5);
+       //* cos(u_Time / 5.0) / (sin(u_Time * 2.5) 
   diff = i_Position - u_Origin;
   if ( length(diff) < 0.25 ) {
     displacement = normalize(diff) * sin(length(diff) * 7.0) * max(0.16, sin(u_Time) * 0.45);
     gl_PointSize = 2.0;
     gl_Position = vec4(0.6 * i_Position + displacement, 0.5, 1.0);  
   } else {
-    gl_PointSize = 1.2;
+    gl_PointSize = 2.0 - 4.0 * length(displacement);
     gl_Position = vec4(0.6 * i_Position + displacement, 0.6, 1.0);  
   }
 }
