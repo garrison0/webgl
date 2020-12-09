@@ -54,6 +54,7 @@
     var postBufferInfo;
     var rg_noise_texture;
     var forcefield_texture;
+    var forcefield_texture2;
     var fbi;
     var fbi2;
     var fbi3;
@@ -87,7 +88,7 @@
       return texture;
     }
 
-    function init(forcefield_image) {
+    function init(forcefield_image, forcefield_image2) {
       feedbackProgramInfo = twgl.createProgramInfo(gl, [tf_vs, tf_fs], { 
         transformFeedbackVaryings: 
           [
@@ -175,9 +176,17 @@
 
       forcefield_texture = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, forcefield_texture);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB8, gl.RGB, gl.UNSIGNED_BYTE, force_field_image);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLIP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLIP_TO_EDGE);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB8, gl.RGB, gl.UNSIGNED_BYTE, forcefield_image);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+      forcefield_texture2 = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, forcefield_texture2);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB8, gl.RGB, gl.UNSIGNED_BYTE, forcefield_image2);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     
@@ -233,6 +242,7 @@
         u_Time: total_time,
         u_RgNoise: rg_noise_texture,
         u_ForceField: forcefield_texture,
+        u_ForceFieldSmooth: forcefield_texture2,
         u_Screen: [gl.canvas.clientWidth, gl.canvas.clientHeight]
       };
 
@@ -386,10 +396,18 @@
       requestAnimationFrame(render);
     }
     
+    var count = 0;
     var force_field_image = new Image();
     force_field_image.src = './assets/rgperlin2.png';
+    var force_field_image2 = new Image();
+    force_field_image2.src = './assets/rgperlin.png';
     force_field_image.onload = function () {
-      init(force_field_image)
+      count++;
+      if (count === 2) init(force_field_image, force_field_image2);
+    }
+    force_field_image2.onload = function () {
+      count++;
+      if (count === 2) init(force_field_image, force_field_image2);
     }
   </script>
 </body>

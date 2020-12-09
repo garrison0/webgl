@@ -31,6 +31,7 @@ uniform float u_MinSpeed;
 uniform float u_MaxSpeed;
 
 uniform sampler2D u_ForceField;
+uniform sampler2D u_ForceFieldSmooth;
 
 uniform vec2 u_Screen;
 
@@ -149,13 +150,16 @@ void main() {
     if (i_Age < 2.0) { 
       force = 2.5 * (texture(u_ForceField, i_Position) - i_Age * vec4(0.5)).rg;
     } else { 
-      if ( u_Time < 10000.0 ) { 
+      if ( u_Time < 5000.0 ) { 
         force = 1.5 * (texture(u_ForceField, i_Position) - vec4(1.0, -1.0,0,0)).rg;
         // force = snoise(v_Position) * vec2(1.0);
       }
-      else { 
-        force = snoise(v_Position) * (0.5 * vec2(-1.0, 1.0) + 0.5 * vec2(sin());
+      else if ( u_Time < 24000.0 || int(floor(u_Time / 50000.0)) % 2 == 1 ) { 
+        force = snoise(v_Position) * (0.5 * vec2(-1.0, 1.0) + 0.5 * vec2(sin(u_Time / 4.0)));
         // force = 3.5 * (texture(u_ForceField, i_Position).rg - i_Age * vec2(0.0, 1.0)).rg;
+      }
+      else { 
+        force = 1.5 * (texture(u_ForceFieldSmooth, i_Position / 2.5) - vec4(0.5)).rg;
       }
     }
     
@@ -198,7 +202,7 @@ void main() {
   v_Age = i_Age;
   v_Life = i_Life;
 
-  gl_PointSize = 1.0 + 3.0 * (1.0 - i_Age/i_Life);
+  gl_PointSize = 1.0 + 1.0 * (i_Age/i_Life);
   gl_Position = vec4(i_Position, 0.0, 1.0);
 }
 `
@@ -318,10 +322,12 @@ void main() {
   vec4 col = vec4(0);
 
   // perceived luminance = (0.299*R + 0.587*G + 0.114*B)
-  if (firColor.r * 0.299 + firColor.g * 0.587 + firColor.b * 0.114 > 0.25) { 
-    col += 0.35 * firColor;
-    col += 0.31 * secColor;
-    col += 0.3 * thirdCol;
+  if (firColor.r * 0.299 + firColor.g * 0.587 + firColor.b * 0.114 > 0.99 && 
+      thirdCol.r * 0.299 + thirdCol.g * 0.587 + thirdCol.b * 0.114 > 0.89) { 
+    col = vec4(1.0);
+    col -= 0.31 * firColor;
+    col -= 0.20 * secColor;
+    col -= 0.25 * thirdCol;
     // col *= 0.98;
   } else { 
     col += 0.7 * thirdCol;
@@ -329,6 +335,6 @@ void main() {
     col += 0.375 * firColor;
   }
 
-  o_FragColor = min(vec4(1.0), col);
+  o_FragColor = max(vec4(0.0), min(vec4(1.0), col));
 }
 `
