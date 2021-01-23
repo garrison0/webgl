@@ -2,126 +2,69 @@ var tf_vs = `#version 300 es
 
 precision highp float;
 
-/* Number of seconds (possibly fractional) that has passed since the last
-   update step. */
-uniform float u_TimeDelta;
-
-/* A texture with just 2 channels (red and green), filled with random values.
-   This is needed to assign a random direction to newly born particles. */
 uniform sampler2D u_RgNoise;
-
-/* This is the gravity vector. It's a force that affects all particles all the
-   time.*/
-uniform vec2 u_Gravity;
-
-/* This is the point from which all newborn particles start their movement. */
-uniform vec2 u_Origin;
-
-/* Theta is the angle between the vector (1, 0) and a newborn particle's
-   velocity vector. By setting u_MinTheta and u_MaxTheta, we can restrict it
-   to be in a certain range to achieve a directed "cone" of particles.
-   To emit particles in all directions, set these to -PI and PI. */
-uniform float u_MinTheta;
-uniform float u_MaxTheta;
-
-/* The min and max values of the (scalar!) speed assigned to a newborn
-   particle.*/
-uniform float u_MinSpeed;
-uniform float u_MaxSpeed;
-
-uniform sampler2D u_ForceField;
-
+uniform sampler2D u_YGradient;
+uniform sampler2D u_XGradient;
+uniform float u_TimeDelta;
+uniform float u_Time;
 uniform vec2 u_Screen;
 
-/* Inputs. These reflect the state of a single particle before the update. */
-
-/* Where the particle is. */
 in vec2 i_Position;
-
-/* Age of the particle in seconds. */
-in float i_Age;
-
-/* How long this particle is supposed to live. */
-in float i_Life;
-
-/* Which direction it is moving, and how fast. */ 
+in vec2 i_Size;
 in vec2 i_Velocity;
 
 /* Outputs. These mirror the inputs. These values will be captured
    into our transform feedback buffer! */
 out vec2 v_Position;
-out float v_Age;
-out float v_Life;
+out vec2 v_Size;
 out vec2 v_Velocity;
 
 void main() {
-  /* First, choose where to sample the random texture. I do it here
-      based on particle ID. It means that basically, you're going to
-      get the same initial random values for a given particle. The result
-      still looks good. I suppose you could get fancier, and sample
-      based on particle ID *and* time, or even have a texture where values
-      are not-so-random, to control the pattern of generation. */
   ivec2 noise_coord = ivec2(gl_VertexID % 512, gl_VertexID / 512);
   
-  /* Get the pair of random values. */
   vec2 rand = texelFetch(u_RgNoise, noise_coord, 0).rg;
 
-  if (i_Age >= i_Life) {
-    /* Particle has exceeded its lifetime! Time to spawn a new one
-       in place of the old one, in accordance with our rules.*/
+  /* Update parameters according to our simple rules.*/
+  v_Position = i_Position + i_Velocity * u_TimeDelta;
 
-    /* Decide the direction of the particle based on the first random value.
-       The direction is determined by the angle theta that its vector makes
-       with the vector (1, 0).*/
-    float theta = u_MinTheta + rand.r*(u_MaxTheta - u_MinTheta);
-
-    /* Derive the x and y components of the direction unit vector.
-       This is just basic trig. */
-    float x = cos(theta);
-    float y = sin(theta);
-
-    /* Return the particle to a random position. */
-    v_Position = (rand * 2.0) - 1.0;
-
-    /* It's new, so age must be set accordingly.*/
-    v_Age = 0.0;
-    v_Life = i_Life;
-
-    /* Generate final velocity vector. We use the second random value here
-       to randomize speed. */
-    v_Velocity =
-      vec2(x, y) * (u_MinSpeed + rand.g * (u_MaxSpeed - u_MinSpeed));
-
-  } else {
-    /* Update parameters according to our simple rules.*/
-    v_Position = i_Position + i_Velocity * u_TimeDelta;
-
-    /* wrap around the screen */
-    if (v_Position.x > 1.0) {
-      v_Position.x = v_Position.x - 2.0;
-    } else if (v_Position.x < -1.0) { 
-      v_Position.x = v_Position.x + 2.0;
-    }
-
-    if (v_Position.y > 1.0) {
-      v_Position.y = v_Position.y - 2.0;
-    } else if (v_Position.y < -1.0) { 
-      v_Position.y = v_Position.y + 2.0;
-    }
-
-    v_Age = i_Age + u_TimeDelta;
-    v_Life = i_Life;
-
-    rand = rand * 2.0 - vec2(1.0);
-    // vec2 force = 0.4 * (rand.r * texture(u_ForceField, i_Position) - vec4(rand.g) * texture(u_ForceField, i_Position) * i_Age).rg;
-    vec2 force = 2.5 * (texture(u_ForceField, i_Position) - vec4(0.47)).rg;
-    force = 0.5 * (force - 0.5 * vec2(rand.r)); 
-    v_Velocity = i_Velocity + force * u_TimeDelta;
-
-    if (length(v_Velocity) > u_MaxSpeed) { 
-      v_Velocity = v_Velocity * 0.95;
-    }
+  /* wrap around the screen */
+  if (v_Position.x > 1.0) {
+    v_Position.x = v_Position.x - 2.0;
+  } else if (v_Position.x < -1.0) { 
+    v_Position.x = v_Position.x + 2.0;
   }
+
+  if (v_Position.y > 1.0) {
+    v_Position.y = v_Position.y - 2.0;
+  } else if (v_Position.y < -1.0) { 
+    v_Position.y = v_Position.y + 2.0;
+  }
+
+  vec2 texture_Coords = ((i_Position + 1.0) / 2.0) * vec2(1.0, -1.0);
+  rand = rand * 2.0 - vec2(1.0);
+  vec4 x_val = texture(u_XGradient, texture_Coords);
+  // 0.299*R + 0.587*G + 0.114*B
+  float x_dir = x_val.r * 0.299 + 0.587 * x_val.g + 0.114 * x_val.b;
+  vec4 y_val = texture(u_YGradient, texture_Coords);
+  float y_dir = y_val.r * 0.299 + 0.587 * y_val.g + 0.114 * y_val.b;
+  vec2 force = vec2(x_dir, y_dir);
+  vec2 fixed_direction = ( vec2(x_dir, y_dir) - vec2(0.25, 0.3) ) ;
+
+  if (length(fixed_direction) > 0.3) {
+    v_Velocity = i_Velocity + 2.0 * ((0.3 * rand + fixed_direction) * u_TimeDelta);
+  } else { 
+    v_Velocity = i_Velocity + 0.5 * rand * u_TimeDelta;
+    v_Velocity *= 0.98;
+  }
+
+  // don't accelerate to infinity
+  if (length(v_Velocity) > 0.2) { 
+    v_Velocity = v_Velocity * 0.9;
+  }
+
+  v_Size = i_Size;
+  // this expects that BOX_SIZE is never > 64
+  v_Size = min(vec2(64.0), max(vec2(4.0), i_Size - 0.1 * rand + 0.1 * v_Velocity));
 }
 `
 
@@ -140,18 +83,15 @@ var vs = `#version 300 es
 precision highp float;
 
 in vec2 i_Position;
-in float i_Age;
-in float i_Life;
-in vec2 i_Velocity;
+in vec2 i_TexCoord;
 
-out float v_Age;
-out float v_Life;
+out vec2 v_Position;
+flat out int vertexId;
 
 void main() {
-  v_Age = i_Age;
-  v_Life = i_Life;
-
-  gl_PointSize = 1.0 + 1.0 * (1.0 - i_Age/i_Life);
+  vertexId = gl_VertexID;
+  v_Position = i_Position;
+  // v_TexCoord = i_TexCoord;
   gl_Position = vec4(i_Position, 0.0, 1.0);
 }
 `
@@ -162,20 +102,19 @@ precision highp float;
 
 out vec4 o_FragColor;
 
+in vec2 v_Position;
+flat in int vertexId;
+
+uniform sampler2D u_RgNoise;
+uniform sampler2D u_Frame;
+uniform float u_Time;
+
 vec3 palette( in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d )
 {  return a + b*cos( 6.28318*(c*t+d) ); }
 
-in float v_Age;
-in float v_Life;
-
 void main() {
-  float t =  v_Age/v_Life;
-  o_FragColor = 1.00 * vec4(
-    palette(t,
-            vec3(0.5,0.5,0.4),
-            vec3(0.1,0.4,0.2),
-            vec3(1.0,1.0,1.5),
-            vec3(0.0,0.10,0.10)), max(0.1, t));
+  vec2 uv = vec2(1.0, -1.0) * (v_Position + 1.0) / 2.0;
+  o_FragColor = texture(u_Frame, uv);
 }
 `;
 
@@ -314,14 +253,37 @@ precision highp float;
 
 uniform sampler2D u_First;
 uniform sampler2D u_Second;
-uniform sampler2D u_Third;
+uniform sampler2D u_Blocks;
+uniform sampler2D u_Frame;
 
 in vec2 v_texCoord;
 
 out vec4 o_FragColor;
 
 void main() {
-  o_FragColor = 0.5 * texture(u_First, v_texCoord) + 0.5 * texture(u_Second, v_texCoord);
+  vec4 col = texture(u_Blocks, v_texCoord);
+  if (col.r > 0.1) { 
+    o_FragColor = col;
+  } else { 
+    o_FragColor = 0.5 * texture(u_First, v_texCoord);
+  }
+  // o_FragColor = texture(u_Blocks, v_texCoord);
+  // o_FragColor = texture(u_Frame, v_texCoord * vec2(1, -1)); 
+  // vec4 blockCol = texture(u_Blocks, v_texCoord);
+  
+  // if (blockCol.g >= 0.23) {
+  //   o_FragColor = texture(u_Frame, v_texCoord * vec2(1, -1));
+  // } 
+  //   o_FragColor = texture(u_Frame, v_texCoord * vec2(1, -1)); 
+  // } 
+  //   o_FragColor = texture(u_Blocks, v_texCoord) + 0.5 * texture(u_First, v_texCoord) + 0.5 * texture(u_Second, v_texCoord);
+  // } else { 
+  //   o_FragColor = texture(u_Frame, v_texCoord * vec2(1, -1));
+  // }
+
+  // o_FragColor = texture(u_Blocks, v_texCoord) + 0.5 * texture(u_First, v_texCoord) + 0.5 * texture(u_Second, v_texCoord); 
+  // o_FragColor = 1.0 * texture(u_Blocks, v_texCoord);
+  // o_FragColor = 0.5 * texture(u_First, v_texCoord) + 0.5 * texture(u_Second, v_texCoord);
   // vec2 onePixel = vec2(1) / vec2(textureSize(u_Second, 0));
   // o_FragColor = texture(u_Second, v_texCoord);
   // o_FragColor = 1.0 * texture(u_First, v_texCoord) + 1.0 * texture(u_Second, v_texCoord) + 1.0 * texture(u_Third, v_texCoord);

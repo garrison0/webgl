@@ -8,6 +8,7 @@ uniform vec2 u_Origin;
 uniform vec2 u_TextureSize;
 uniform sampler2D u_Texture;
 uniform float u_Time;
+uniform vec2 u_Screen;
 
 out vec2 vPUv;
 out vec2 diff;
@@ -50,6 +51,7 @@ float rand(vec2 n) {
 void main() {
   vec2 puv = i_Position * 1.0;
   vPUv = vec2(puv.x, -puv.y);
+  vec2 aspect = vec2(u_Screen.y / u_Screen.x, 1.0);
 
   vec2 displacement = vec2(0.0);
   displacement += vec2(
@@ -68,6 +70,7 @@ void main() {
     gl_PointSize = 2.0 - 4.0 * length(displacement);
     gl_Position = vec4(0.6 * i_Position + displacement, 0.6, 1.0);  
   }
+  gl_Position = gl_Position * vec4(aspect, 1., 1.);
 }
 `
 

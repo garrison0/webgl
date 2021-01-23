@@ -87,7 +87,8 @@
     // const min_age = 4.0;
     // const max_age = 20.0;
     const BOX_SIZE = 16;
-    const num_particles = Math.floor(gl.canvas.clientWidth * gl.canvas.clientHeight / BOX_SIZE);
+    var num_particles = Math.floor(gl.canvas.clientWidth * gl.canvas.clientHeight / ( BOX_SIZE * BOX_SIZE ));
+    num_particles += num_particles % 2;
     // const num_particles = 150000;
     // var born_particles = 0.0;
     var old_timestamp = 0.0;
@@ -96,24 +97,25 @@
     // var kernel_size = 49;
 
     var programInfo;
-    // var feedbackProgramInfo;
+    var feedbackProgramInfo;
+    var macroblockProgramInfo;
     // var postProcessingProgramInfo;
     var finalRenderProgramInfo;
     var postBufferInfo;
-    // var rg_noise_texture;
-    // var forcefield_texture;
+    var rg_noise_texture;
+    var forcefield_texture;
     var imageGradX_fbi;
     var imageGradY_fbi;
     var difference_fbi;
+    var macroblock_fbi;
     var texture;
     var imageGradX_texture;
     var imageGradY_texture;
     var difference_texture;
+    var macroblock_texture;
 
-    // var texture2;
-    // var texture3;
-    // var read_buffers;
-    // var write_buffers;
+    var read_buffers;
+    var write_buffers;
     // var kernel = [];
     // var offsets = [];
     // var kernel_weight;
@@ -141,19 +143,19 @@
     }
 
     function init(forcefield_image) {
-      // feedbackProgramInfo = twgl.createProgramInfo(gl, [tf_vs, tf_fs], { 
-      //   transformFeedbackVaryings: 
-      //     [
-      //       "v_Position",
-      //       "v_Age",
-      //       "v_Life",
-      //       "v_Velocity"
-      //     ]
-      // });
+      feedbackProgramInfo = twgl.createProgramInfo(gl, [tf_vs, tf_fs], { 
+        transformFeedbackVaryings: 
+          [
+            "v_Position",
+            "v_Size",
+            "v_Velocity"
+          ]
+      });
 
       // rendering program
       programInfo = twgl.createProgramInfo(gl, [flipped_vs, n_fs]);
 
+      macroblockProgramInfo = twgl.createProgramInfo(gl, [vs, fs])
       // postProcessingProgramInfo = twgl.createProgramInfo(gl, [p_vs, p_fs]);
 
       finalRenderProgramInfo = twgl.createProgramInfo(gl, [default_vs, combine_fs]);
@@ -183,51 +185,54 @@
       for (var i = 0; i < num_particles; i++) {
         initial_velocities.push(0.0);
         initial_velocities.push(0.0);
-        initial_positions.push( ( (i * BOX_SIZE) % gl.canvas.clientWidth ) / gl.canvas.clientWidth ); // x in clip-space
-        initial_positions.push( Math.floor( i * BOX_SIZE  / gl.canvas.clientWidth ) * BOX_SIZE / gl.canvas.clientHeight ); // y in clip-space
-        initial_sizes.push(BOX_SIZE);
+        let x = ( ( ( (i * BOX_SIZE) % gl.canvas.clientWidth ) / gl.canvas.clientWidth ) - 0.5 ) * 2.0;
+        let y = ( ( Math.floor( i * BOX_SIZE  / gl.canvas.clientWidth ) * BOX_SIZE / gl.canvas.clientHeight ) - 0.5 ) * 2.0;
+        initial_positions.push( x ); // x in clip-space
+        initial_positions.push( y ); // y in clip-space
+        initial_sizes.push(BOX_SIZE); // x length
+        initial_sizes.push(BOX_SIZE); // y length
       }
 
       initial_positions = new Float32Array(initial_positions);
       initial_velocities = new Float32Array(initial_velocities);
+      initial_sizes = new Float32Array(initial_sizes);
 
-      // 1 buffer for each attribute
-      // read_buffers = {
-      //   "position": twgl.createBufferFromTypedArray(gl, initial_positions),
-      //   "velocity": twgl.createBufferFromTypedArray(gl, initial_velocities),
-      //   "life": twgl.createBufferFromTypedArray(gl, initial_lives),
-      //   "age": twgl.createBufferFromTypedArray(gl, initial_ages)
-      // }
+      // particle system buffers 
+      read_buffers = {
+        "position": twgl.createBufferFromTypedArray(gl, initial_positions),
+        "velocity": twgl.createBufferFromTypedArray(gl, initial_velocities),
+        "size": twgl.createBufferFromTypedArray(gl, initial_sizes),
+      }
 
-      // write_buffers = {
-      //   "position": twgl.createBufferFromTypedArray(gl, initial_positions),
-      //   "velocity": twgl.createBufferFromTypedArray(gl, initial_velocities),
-      //   "life": twgl.createBufferFromTypedArray(gl, initial_lives),
-      //   "age": twgl.createBufferFromTypedArray(gl, initial_ages)
-      // }
+      write_buffers = {
+        "position": twgl.createBufferFromTypedArray(gl, initial_positions),
+        "velocity": twgl.createBufferFromTypedArray(gl, initial_velocities),
+        "size": twgl.createBufferFromTypedArray(gl, initial_sizes),
+      }
 
-      // rg_noise_texture = gl.createTexture();
-      // gl.bindTexture(gl.TEXTURE_2D, rg_noise_texture);
-      // gl.texImage2D(gl.TEXTURE_2D,
-      //               0, 
-      //               gl.RG8,
-      //               512, 512,
-      //               0,
-      //               gl.RG,
-      //               gl.UNSIGNED_BYTE,
-      //               randomRGData(512, 512));
-      // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
-      // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
-      // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-      // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      rg_noise_texture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, rg_noise_texture);
+      gl.texImage2D(gl.TEXTURE_2D,
+                    0, 
+                    gl.RG8,
+                    512, 512,
+                    0,
+                    gl.RG,
+                    gl.UNSIGNED_BYTE,
+                    randomRGData(512, 512));
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
-      // forcefield_texture = gl.createTexture();
-      // gl.bindTexture(gl.TEXTURE_2D, forcefield_texture);
-      // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB8, gl.RGB, gl.UNSIGNED_BYTE, force_field_image);
-      // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-      // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-      // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      forcefield_texture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, forcefield_texture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, forcefield_image);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     
       const targetTextureWidth = gl.canvas.clientWidth;
       const targetTextureHeight = gl.canvas.clientHeight;
@@ -235,24 +240,30 @@
       imageGradX_texture = createEmptyTexture(targetTextureWidth, targetTextureHeight);
       imageGradY_texture = createEmptyTexture(targetTextureWidth, targetTextureHeight);
       difference_texture = createEmptyTexture(targetTextureWidth, targetTextureHeight);
+      macroblock_texture = createEmptyTexture(targetTextureWidth, targetTextureHeight);
 
-      // make fb to render to these textures
+      // make framebuffers to render to these textures
       const attachments = [
         { format: gl.RGBA, mag: gl.NEAREST },
       ]
-      imageGradX_fbi = twgl.createFramebufferInfo(gl, attachments, targetTextureWidth, targetTextureWidth);
+      imageGradX_fbi = twgl.createFramebufferInfo(gl, attachments, targetTextureWidth, targetTextureHeight);
       twgl.bindFramebufferInfo(gl, imageGradX_fbi)
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, imageGradX_texture, 0);
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      imageGradY_fbi = twgl.createFramebufferInfo(gl, attachments, targetTextureWidth, targetTextureWidth);
+      imageGradY_fbi = twgl.createFramebufferInfo(gl, attachments, targetTextureWidth, targetTextureHeight);
       twgl.bindFramebufferInfo(gl, imageGradY_fbi)
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, imageGradY_texture, 0);
       
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      difference_fbi = twgl.createFramebufferInfo(gl, attachments, targetTextureWidth, targetTextureWidth);
+      difference_fbi = twgl.createFramebufferInfo(gl, attachments, targetTextureWidth, targetTextureHeight);
       twgl.bindFramebufferInfo(gl, difference_fbi)
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, imageGradY_texture, 0);
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      macroblock_fbi = twgl.createFramebufferInfo(gl, attachments, targetTextureWidth, targetTextureHeight);
+      twgl.bindFramebufferInfo(gl, macroblock_fbi)
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, macroblock_texture, 0);
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
@@ -274,7 +285,7 @@
 
     function render(time) {
       const uniforms = (isVerticle) => { return { 
-        u_Texture: texture,
+        u_Texture: texture, // the original frame
         u_screen: [gl.canvas.clientWidth, gl.canvas.clientHeight],
         u_offsets: [-1, -1, 
                     0, -1,
@@ -294,18 +305,20 @@
         u_isVerticle: isVerticle
       } };
 
-      // const uniforms = {
-      //   u_MinSpeed: 0.0,
-      //   u_MaxSpeed: 0.15,
-      //   u_MinTheta: 0,
-      //   u_MaxTheta: 2 * Math.PI,
-      //   u_Origin: mouse_pos,
-      //   u_Gravity: [-0.25, -0.61],
-      //   u_TimeDelta: 0.005,
-      //   u_RgNoise: rg_noise_texture,
-      //   u_ForceField: forcefield_texture,
-      //   u_Screen: [gl.canvas.width, gl.canvas.height]
-      // };
+      const particleUniforms = {
+        u_Origin: mouse_pos,
+        u_Gravity: [-0.25, -0.61],
+        u_TimeDelta: 0.005,
+        u_RgNoise: rg_noise_texture,
+        u_Screen: [gl.canvas.width, gl.canvas.height]
+      };
+
+      var macroUniforms = { 
+        u_Screen: [gl.canvas.clientWidth, gl.canvas.clientHeight],
+        u_RgNoise: rg_noise_texture,
+        u_Time: total_time,
+        u_Frame: texture
+      };
 
       // var postUniforms = (sampleTexture, horizontal) => {
       //   return { 
@@ -321,40 +334,30 @@
 
       var finalRenderUniforms = {
         u_First: imageGradX_texture,
-        u_Second: imageGradY_texture
+        u_Second: imageGradY_texture,
+        u_Blocks: macroblock_texture,
+        u_Frame: texture
       }
 
-      // rendering program READ info
-      // var bufferInfoRender = {
-      //   numElements: num_particles,
-      //   attribs: {
-      //     i_Position: { buffer: read_buffers["position"], numComponents: 2 },
-      //     i_Age:    { buffer: read_buffers["age"], numComponents: 1 }, 
-      //     i_Life: { buffer: read_buffers["life"], numComponents: 1 }
-      //   },
-      // };
+      // write program READ info
+      var bufferInfoWriteRead = {
+        numElements: num_particles,
+        attribs: {
+          i_Position: { buffer: read_buffers["position"], numComponents: 2 },
+          i_Velocity: { buffer: read_buffers["velocity"], numComponents: 2 },
+          i_Size: { buffer: read_buffers["size"], numComponents: 2 }
+        },
+      };
 
-      // // write program READ info
-      // var bufferInfoWriteRead = {
-      //   numElements: num_particles,
-      //   attribs: {
-      //     i_Position: { buffer: read_buffers["position"], numComponents: 2 },
-      //     i_Age:    { buffer: read_buffers["age"], numComponents: 1 }, 
-      //     i_Life: { buffer: read_buffers["life"], numComponents: 1 },
-      //     i_Velocity: { buffer: read_buffers["velocity"], numComponents: 2 }
-      //   },
-      // };
-
-      // // write buffer WRITE
-      // var bufferInfoWrite = {
-      //   numElements: num_particles,
-      //   attribs: {
-      //     v_Position: { buffer: write_buffers["position"], numComponents: 2 },
-      //     v_Age:    { buffer: write_buffers["age"], numComponents: 1 }, 
-      //     v_Life: { buffer: write_buffers["life"], numComponents: 1 },
-      //     v_Velocity: { buffer: write_buffers["velocity"], numComponents: 2 }
-      //   }
-      // }
+      // write buffer WRITE
+      var bufferInfoWrite = {
+        numElements: num_particles,
+        attribs: {
+          v_Position: { buffer: write_buffers["position"], numComponents: 2 },
+          v_Velocity: { buffer: write_buffers["velocity"], numComponents: 2 },
+          v_Size: { buffer: write_buffers["size"], numComponents: 2 }
+        }
+      }
 
       if (old_timestamp != 0) {
         time_delta = time - old_timestamp;
@@ -373,25 +376,25 @@
       }
 
       // ////////// RENDER -- TRANSFORM FEEDBACK //////////
-      // gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      // gl.viewport(0, 0, gl.canvas.clientWidth, gl.canvas.clientHeight);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-      // // bind the 'write' buffer as TF
-      // const tf = twgl.createTransformFeedback(gl, feedbackProgramInfo, bufferInfoWrite); 
+      const tf = twgl.createTransformFeedback(gl, feedbackProgramInfo, bufferInfoWrite); 
 
-      // twgl.setBuffersAndAttributes(gl, feedbackProgramInfo, bufferInfoWriteRead);
+      twgl.setBuffersAndAttributes(gl, feedbackProgramInfo, bufferInfoWriteRead);
 
-      // gl.enable(gl.RASTERIZER_DISCARD);
+      gl.enable(gl.RASTERIZER_DISCARD);
 
-      // gl.useProgram(feedbackProgramInfo.program);
-      // gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, tf);
-      // gl.beginTransformFeedback(gl.POINTS);
-      // twgl.setUniforms(feedbackProgramInfo, uniforms);
-      // twgl.drawBufferInfo(gl, bufferInfoWriteRead, gl.POINTS);
-      // gl.endTransformFeedback();
-      // gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+      gl.useProgram(feedbackProgramInfo.program);
+      gl.viewport(0, 0, gl.canvas.clientWidth, gl.canvas.clientHeight);
 
-      // gl.disable(gl.RASTERIZER_DISCARD);
+      gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, tf);
+      gl.beginTransformFeedback(gl.POINTS);
+      twgl.setUniforms(feedbackProgramInfo, particleUniforms);
+      twgl.drawBufferInfo(gl, bufferInfoWriteRead, gl.POINTS);
+      gl.endTransformFeedback();
+      gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+
+      gl.disable(gl.RASTERIZER_DISCARD);
 
       // ////////// RENDER -- TO FRAMEBUFFER(s) //////////
       // make image gradient textures
@@ -428,6 +431,78 @@
       // value + difference
       // tba - need buffer of frames!
       
+      // ////////// CALCULATE BUFFERS FOR the MACROBLOCKS, render them to a texture 
+      // it's unfortunate that we must do this on the CPU and load/unload memory
+      // however varyings cannot be arrays, and TF is limited to 4 components per 'out'
+      var positions = new Float32Array(num_particles * 2); 
+      var sizes = new Float32Array(num_particles * 2);
+      gl.bindBuffer(gl.ARRAY_BUFFER, read_buffers["position"]);
+      gl.getBufferSubData(gl.ARRAY_BUFFER, 0, positions); 
+      gl.bindBuffer(gl.ARRAY_BUFFER, read_buffers["size"]);
+      gl.getBufferSubData(gl.ARRAY_BUFFER, 0, sizes);
+      var quadVertices = twgl.primitives.createXYQuadVertices(1, 0.5, 0.5);
+      var boxVertices = [];
+      var boxTexCoords = [];
+      var numVisible = 0;
+      var PROPORTION_VISIBLE_FROM_PARTICLE_GROUP = 0.1;
+      var PROPORTION_VISIBLE_FROM_INITIAL_GRID = 0.0;
+      for (var i = 0; i < (2 * num_particles) - 1; i+=2) { 
+        // if (Math.random() < PROPORTION_VISIBLE_FROM_PARTICLE_GROUP) { 
+          numVisible = numVisible + 1;
+
+          let x = positions[i];
+          let y = positions[i+1];
+          let x_size = sizes[i] / gl.canvas.clientWidth;
+          let y_size = sizes[i+1] / gl.canvas.clientHeight;  
+          boxVertices.push(x);
+          boxVertices.push(y);
+
+          boxVertices.push(x);
+          boxVertices.push(y+y_size);
+
+          boxVertices.push(x+x_size);
+          boxVertices.push(y);
+          
+          boxVertices.push(x+x_size);
+          boxVertices.push(y);
+
+          boxVertices.push(x);
+          boxVertices.push(y+y_size);
+
+          boxVertices.push(x+x_size);
+          boxVertices.push(y+y_size);
+        // }
+      }
+
+      boxVertices = new Float32Array(boxVertices);
+      boxTexCoords = new Float32Array(boxTexCoords);
+
+      var positionReadBuffer = twgl.createBufferFromTypedArray(gl, boxVertices);
+      var texCoordReadBuffer = twgl.createBufferFromTypedArray(gl, boxTexCoords);
+
+      // rendering program READ info
+      var bufferInfoRender = {
+        numElements: 6 * numVisible,
+        attribs: {
+          i_TexCoords: { buffer: texCoordReadBuffer, numComponents: 2 },
+          i_Position: { buffer: positionReadBuffer, numComponents: 2 }
+        },
+      };
+        
+      // gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.useProgram(macroblockProgramInfo.program);
+      twgl.bindFramebufferInfo(gl, macroblock_fbi);
+      gl.viewport(0, 0, gl.canvas.clientWidth, gl.canvas.clientHeight);
+
+      gl.bindTexture(gl.TEXTURE_2D, macroblock_texture);
+
+      gl.clearColor(0.0,0.0,0.0,1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      twgl.setUniforms(macroblockProgramInfo, macroUniforms);
+      twgl.setBuffersAndAttributes(gl, macroblockProgramInfo, bufferInfoRender); 
+      twgl.drawBufferInfo(gl, bufferInfoRender, gl.TRIANGLES);
+
       // ////////// RENDER -- POSTPROCESSING (ping pong between textures 2 and 3) //////////
       // gl.useProgram(postProcessingProgramInfo.program);
       // twgl.bindFramebufferInfo(gl, fbi2);
@@ -470,15 +545,16 @@
       twgl.drawBufferInfo(gl, postBufferInfo, gl.TRIANGLES);
 
       // now swap
-      // var temp = read_buffers;
-      // read_buffers = write_buffers;
-      // write_buffers = temp;
+      var temp = read_buffers;
+      read_buffers = write_buffers;
+      write_buffers = temp;
 
       requestAnimationFrame(render);
     }
     
     var force_field_image = new Image();
-    force_field_image.src = './assets/rgperlin.png';
+    force_field_image.src = './assets/monalisa.jpg';
+    // force_field_image.src = './assets/rgperlin.png';
     force_field_image.onload = function () {
       init(force_field_image)
     }

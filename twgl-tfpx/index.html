@@ -200,17 +200,17 @@
       const attachments = [
         { format: gl.RGBA, mag: gl.NEAREST },
       ]
-      fbi = twgl.createFramebufferInfo(gl, attachments, targetTextureWidth, targetTextureWidth);
+      fbi = twgl.createFramebufferInfo(gl, attachments, targetTextureWidth, targetTextureHeight);
       twgl.bindFramebufferInfo(gl, fbi)
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      fbi2 = twgl.createFramebufferInfo(gl, attachments, targetTextureWidth, targetTextureWidth);
+      fbi2 = twgl.createFramebufferInfo(gl, attachments, targetTextureWidth, targetTextureHeight);
       twgl.bindFramebufferInfo(gl, fbi2)
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture2, 0);
       
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      fbi3 = twgl.createFramebufferInfo(gl, attachments, targetTextureWidth, targetTextureWidth);
+      fbi3 = twgl.createFramebufferInfo(gl, attachments, targetTextureWidth, targetTextureHeight);
       twgl.bindFramebufferInfo(gl, fbi3)
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture3, 0);
 
