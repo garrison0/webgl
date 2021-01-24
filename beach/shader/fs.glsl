@@ -479,8 +479,9 @@ vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
     // figure out a way to make the sky not move in jitters
     // plus project the sky onto a sphere so it's more convincing
     // rd.x *= 10.0;
-    time = 127.0 + 0.1 * time;// * sunsetAmt(time); //+ 5.432*(time * 0.0001 * glitchAmtFour(time));// + time * 0.00001;
-    // time = time + 0.25 * (0.5 + 0.5 * sin(0.545444*time));
+    float realTime = time;
+    time = 127.0 + 0.015 * time;// * sunsetAmt(time); //+ 5.432*(time * 0.0001 * glitchAmtFour(time));// + time * 0.00001;
+    time = time + 0.25 * (0.5 + 0.5 * sin(0.545444*time));
     
     vec3 col = vec3(0.3,0.4,0.56)*0.3 - 0.3*rd.y;
 
@@ -503,7 +504,7 @@ vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
         // compose both noises
         float displacement = 2.2 * (0.8 * tNoise + 0.4 * b);
 
-        float fbmNoise = 0.1*fbm(vec3(pos.x*0.01, rd.y*rd.x*sunFacing*0.1, pos.z*0.1 + time));
+        float fbmNoise = 0.05*fbm(vec3(pos.x*0.01, rd.y*rd.x*sunFacing*0.1, pos.z*0.1 + time));
 
         // make a second noise with domain warped noise, b
         float displacementFBM = 7.5 * ( 0.2 * fbmNoise + 0.3 * b );
@@ -516,12 +517,6 @@ vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
         
         // pNoise *= pNoise;
 
-        col = palette( pNoise + time * 0.25,
-                    vec3(0.5,0.5,0.5),
-                    vec3(0.5,0.5,0.5),
-                    vec3(2.0,1.0,0.0),
-                    vec3(0.5,0.2,0.25));
-        
         // col = palette( -0.1 * time + 0.25 * (displacement+ displacementFBM),
         //     vec3(0.5,0.5,0.5),
         //     vec3(0.5,0.5,0.5),
@@ -529,6 +524,32 @@ vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
         //     vec3(0.5,0.2,0.25));
         vec2 uv = (ro+t*rd).xz;
         float cl = 8.0 * sin( (uv.y + 0.1 * sin(time) * abs(0.5 - uv.x)) * (0.0005 + 0.000001 * time) );
+
+        // col = mix( palette( pNoise + time * 0.25,
+        //             vec3(0.5,0.5,0.5),
+        //             vec3(0.5,0.5,0.5),
+        //             vec3(2.0,1.0,0.0),
+        //             vec3(0.5,0.2,0.25)), col, rd.y);
+
+        // col = mix( palette( pNoise + time * 0.25,
+        //             vec3(0.5,0.5,0.5),
+        //             vec3(0.5,0.5,0.5),
+        //             vec3(2.0,1.0,0.0),
+        //             vec3(0.45,0.15,0.05)), col, 0.01*rd.y);
+        
+        col = palette( 1.2*pNoise + time * 0.25,
+                    vec3(0.5,0.5,0.5),
+                    vec3(0.5,0.5,0.5),
+                    vec3(2.0,1.0,0.0),
+                    vec3(0.6,0.5,0.25) );
+        // col.rg *= 0.9;
+        // col.r *= 0.8;
+        // col.rgb *= 1.6 - (0.6 * sunsetAmt(realTime));
+        // col.b *= 0.45 + (0.55 * sunsetAmt(realTime));
+
+        // col *= 1.2 - 0.5 * sunsetAmt(realTime);
+        // col = 0.3 * col + normalize(col) * pow(length(col), 0.2) * 0.8;
+
         col = mix( col, vec3(0.3,0.2,0.1), rd.y * 0.1 * cl);
         // for glitch:
         // col = mix( col, vec3(0.3,0.2,0.1), glitchAmtThree(uTime) * time * cl * uv.x * 0.1 );
@@ -536,7 +557,7 @@ vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
     }
     
     float sd = pow( clamp( 0.04 + 0.96*dot(sunLig,rd), 0.0, 1.0 ), 4.0 );
-    col = mix( col, vec3(1.0,0.30,0.05), sd*exp(-abs((60.0-(55.*sunsetAmt(time)*sd)))*rd.y) ) ;
+    col = mix( col, vec3(1.0,0.30,0.05), sd*exp(-abs((60.0-(55.*sunsetAmt(realTime)*sd)))*rd.y) ) ;
     // over time:
     // set to -abs((60-55*sd))
     // col = mix( col, vec3(0.2,0.25,0.30)*0.7, exp(-40.0*rd.y) ) ;
@@ -548,9 +569,9 @@ vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
 
 float waterMap ( in vec2 p, float time ) { 
     vec2 pm = p * m2;
-    float a = 1.0 * (pow(fbm ( vec3(0.085 * p, time * 0.22) ), 2.0));
-    float b = 0.5 * abs ( fbm ( vec3(0.085 * p, uTime * 0.22) ) - 0.5 ) ;
-    float c = pow(0.5 * ( fbm ( vec3(0.085 * p, uTime * 0.22) ) + 1.00 ), 2.0) ;
+    float a = 1.0 * (pow(fbm ( vec3(0.099 * p, time * 0.22) ), 2.0));
+    float b = 0.5 * abs ( fbm ( vec3(0.099 * p, uTime * 0.22) ) - 0.5 ) ;
+    float c = pow(0.5 * ( fbm ( vec3(0.099 * p, uTime * 0.22) ) + 1.00 ), 0.2) ;
     return c;
 }
 
@@ -584,13 +605,15 @@ vec3 waterColor (in vec3 pos, vec3 rd, vec3 sunLig, float time) {
     col = vec3(0.5);
 
     vec3 normal = getWaterNormal(pos, time);
+    float shadow = calcSoftshadow(pos, sunLig, 0.01, 100.0, 0.75, time); // from the island
+    shadow = pow(shadow, 1.5);
     float ndotr = dot(normal, rd);
     float fresnel = pow(1.0-abs(ndotr),5.);
 
     vec3 skyReflect = skyColor(pos, reflect(rd, normal), sunLig, time);
     skyReflect = skyReflect * skyReflect * (3.5 - 2.0 * skyReflect);
 
-    col = (0.15 + .3 * sunsetAmt(time)) * col + (0.3 + 0.35 * sunsetAmt(time)) * fresnel * skyReflect;
+    col = shadow * (0.15 + .3 * sunsetAmt(time)) * col + (0.3 + 0.35 * sunsetAmt(time)) * fresnel * skyReflect;
     return col * dot(normal, sunLig);
 }
 
