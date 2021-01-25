@@ -228,6 +228,49 @@ float turbulence( vec3 p ) {
     return t;
 }
 
+vec3 hash3( vec2 p ){
+    vec3 q = vec3( dot(p,vec2(127.1,311.7)), 
+				   dot(p,vec2(269.5,183.3)), 
+				   dot(p,vec2(419.2,371.9)) );
+	return fract(sin(q)*43758.5453);
+}
+
+// u = 1.0, v = 0.5 
+// voronoi like noise
+float vnoise( in vec2 x, float u, float v )
+{
+    vec2 p = floor(x);
+    vec2 f = fract(x);
+
+    float k = 1.0 + 63.0*pow(1.0-v,4.0);
+    float va = 0.0;
+    float wt = 0.0;
+    for( int j=-2; j<=2; j++ )
+    for( int i=-2; i<=2; i++ )
+    {
+        vec2  g = vec2( float(i), float(j) );
+        vec3  o = hash3( p + g )*vec3(u,u,1.0);
+        vec2  r = g - f + o.xy;
+        float d = dot(r,r);
+        float w = pow( 1.0-smoothstep(0.0,1.414,sqrt(d)), k );
+        va += w*o.z;
+        wt += w;
+    }
+
+    return va/wt;
+}
+
+float vnoiseOctaves (in vec2 x, float u, float v ) {
+    float t = -.5;
+
+    for (float f = 1.0 ; f <= 10.0 ; f++ ){
+        float power = pow( 2.0, f );
+        t += abs( vnoise( power * x, u, v ) / power );
+    }
+
+    return t;
+}
+
 // --------- DISTANCE FUNCTIONS ---------- //
 // ---- UTILITIES --- // 
 
@@ -480,7 +523,7 @@ vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
     // plus project the sky onto a sphere so it's more convincing
     // rd.x *= 10.0;
     float realTime = time;
-    time = 127.0 + 0.015 * time;// * sunsetAmt(time); //+ 5.432*(time * 0.0001 * glitchAmtFour(time));// + time * 0.00001;
+    time = 127.0 + 0.015 * time + 5.432*(time * 0.0001 * glitchAmtFour(time)); // * sunsetAmt(time); //// + time * 0.00001;
     time = time + 0.25 * (0.5 + 0.5 * sin(0.545444*time));
     
     vec3 col = vec3(0.3,0.4,0.56)*0.3 - 0.3*rd.y;
@@ -489,6 +532,7 @@ vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
     // float t = (100.0 - length(ro)) / length(rd);
     if( t>0.0 )
     {
+        vec3 vPos = ro + t * rd;
         vec3 pos = 100000.*rd.y*normalize(rd * t);
         pos.z += 1000.0*time;
 
@@ -499,7 +543,7 @@ vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
 
         // get a 3d noise using the position, low frequency
         // float b = -2.6*snoise( 0.0001 * vec3( pos.x + 0.2* time, rd.y * 0.001 * time, 10000. - pos.z *0.62+ 0.2 * time ) );
-        float b = -2.1*snoise( 0.0001 * vec3( 0.076*pos.x + 0.002* time, rd.y * 0.0001 * time, 10000. - pos.z *0.062+ 0.002 * time ) );
+        float b = -2.1*snoise( 0.0001 * vec3( 0.076*pos.x + 0.002* time, rd.y * 0.001 * time, 10000. - pos.z *0.062+ 0.002 * time ) );
         
         // compose both noises
         float displacement = 2.2 * (0.8 * tNoise + 0.4 * b);
@@ -513,8 +557,14 @@ vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
         float scalar = sin(time);
         float scalar2 = cos(time);
 
+        vPos.xz *= 0.00019;
+
+        float vNoise = vnoiseOctaves(vPos.xz, 0.94, 0.974);
+
         float pNoise = (2.64+scalar) * tNoise + scalar2 * fbmNoise + 0.35 * b;
         
+        pNoise = 0.5 * vNoise + 0.5 * pNoise;
+
         // pNoise *= pNoise;
 
         // col = palette( -0.1 * time + 0.25 * (displacement+ displacementFBM),
@@ -552,8 +602,8 @@ vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
 
         col = mix( col, vec3(0.3,0.2,0.1), rd.y * 0.1 * cl);
         // for glitch:
-        // col = mix( col, vec3(0.3,0.2,0.1), glitchAmtThree(uTime) * time * cl * uv.x * 0.1 );
-        // col = mix(mix(sin(col*time), col, rd.y * time * sin(cos(time * uv.y - uv.x))), col, 1.0-glitchAmtOne(uTime));
+        col = mix( col, vec3(0.3,0.2,0.1), glitchAmtThree(uTime) * time * cl * uv.x * 0.1 );
+        col = mix(mix(sin(col*time), col, rd.y * time * sin(cos(time * uv.y - uv.x))), col, 1.0-glitchAmtOne(uTime));
     }
     
     float sd = pow( clamp( 0.04 + 0.96*dot(sunLig,rd), 0.0, 1.0 ), 4.0 );
@@ -605,8 +655,14 @@ vec3 waterColor (in vec3 pos, vec3 rd, vec3 sunLig, float time) {
     col = vec3(0.5);
 
     vec3 normal = getWaterNormal(pos, time);
-    float shadow = calcSoftshadow(pos, sunLig, 0.01, 100.0, 0.75, time); // from the island
+    float shadow = calcSoftshadow(pos, sunLig, 0.01, 100.0, 1.0, time); // from the island
     shadow = pow(shadow, 1.5);
+
+    // manually add gradient around the island shadow because water had a strange cutoff on the shoreline
+    shadow = min(1.0, (shadow) + smoothstep(12.0, 13.5, length(pos - (islandCenter() - vec3(5.0, 0.0, 4.0)))));
+
+    // shadow = 1.0;
+
     float ndotr = dot(normal, rd);
     float fresnel = pow(1.0-abs(ndotr),5.);
 
@@ -804,9 +860,9 @@ vec3 render(in vec3 ro, in vec3 rd, in vec3 rdx, in vec3 rdy, float time) {
         }
 
         if (percentWater > 0.001) { 
-            col = percentWater * waterColor(pos, rd, sunLig, time) + ( (1.0 - percentWater) * ((0.02 * material) + lin) ); // ambient + diffuse/spec
+            col = percentWater * waterColor(pos, rd, sunLig, time) + ( (1.0 - percentWater) * ((0.04 * material) + lin) ); // ambient + diffuse/spec
         } else { 
-            col = (0.02 * material) + lin; // ambient + diffuse/spec
+            col = (0.04 * material) + lin; // ambient + diffuse/spec
         }
     }
     
