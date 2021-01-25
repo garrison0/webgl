@@ -557,13 +557,14 @@ vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
         float scalar = sin(time);
         float scalar2 = cos(time);
 
-        vPos.xz *= 0.00019;
+        // vPos.xz *= 0.00019;
 
-        float vNoise = vnoiseOctaves(vPos.xz, 0.94, 0.974);
+        float vNoise = vnoiseOctaves(vPos.xz * 0.00019, 0.94, 0.974);
 
         float pNoise = (2.64+scalar) * tNoise + scalar2 * fbmNoise + 0.35 * b;
         
-        pNoise = 0.5 * vNoise + 0.5 * pNoise;
+        float ratio = smoothstep(16500.0, 30500., -vPos.z);
+        pNoise = (1.0 - ratio) * (0.7 * pNoise + 0.3 * vNoise) + (ratio) * (0.5*vNoise + 0.5 * pNoise * vNoise);
 
         // pNoise *= pNoise;
 
@@ -592,6 +593,10 @@ vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
                     vec3(0.5,0.5,0.5),
                     vec3(2.0,1.0,0.0),
                     vec3(0.6,0.5,0.25) );
+
+        // if (vPos.z < -13500.) { 
+        //     col = vec3(1.0,1.0,1.0);
+        // }
         // col.rg *= 0.9;
         // col.r *= 0.8;
         // col.rgb *= 1.6 - (0.6 * sunsetAmt(realTime));
@@ -607,7 +612,7 @@ vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
     }
     
     float sd = pow( clamp( 0.04 + 0.96*dot(sunLig,rd), 0.0, 1.0 ), 4.0 );
-    col = mix( col, vec3(1.0,0.30,0.05), sd*exp(-abs((60.0-(55.*sunsetAmt(realTime)*sd)))*rd.y) ) ;
+    col = mix( col, vec3(1.0,0.30,0.05), sd*exp(-abs((16.0-(9.*sunsetAmt(realTime)*sd)))*rd.y) ) ;
     // over time:
     // set to -abs((60-55*sd))
     // col = mix( col, vec3(0.2,0.25,0.30)*0.7, exp(-40.0*rd.y) ) ;
@@ -659,7 +664,7 @@ vec3 waterColor (in vec3 pos, vec3 rd, vec3 sunLig, float time) {
     shadow = pow(shadow, 1.5);
 
     // manually add gradient around the island shadow because water had a strange cutoff on the shoreline
-    shadow = min(1.0, (shadow) + smoothstep(12.0, 13.5, length(pos - (islandCenter() - vec3(5.0, 0.0, 4.0)))));
+    shadow = min(1.0, (shadow) + smoothstep(13.0, 15.0, length(pos - (islandCenter() - vec3(8.0, 0.0, -13.0)))));
 
     // shadow = 1.0;
 
