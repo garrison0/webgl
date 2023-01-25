@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "browserify": "^17.0.0",
+    "webgl-debug": "^2.0.1"
+  }
+}
