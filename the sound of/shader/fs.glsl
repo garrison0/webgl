@@ -36,14 +36,15 @@ float sizeSignal(float time) {
     return ap;
 }
 
-float introSignal(float time) { 
-    float introLength = 2.0;  
-    // clamp(0.475 + 0.5 * sin( (3.0*3.141592653/2.0) + ( 2.0*3.141593653 / length ) * a ), 0.0, 1.0);
-    return smoothstep(introLength - 7.0*introLength/10.0, introLength, time);
+float introSignalTime(float time) { 
+    float introLength = 10.0;  
+    float k = time < 0.5 * introLength ? 0.0 : 1.0;
+    float v = time < introLength ? introLength * pow(time/introLength - 0.5, 2.0) : time - 0.75*introLength;
+    return k * v;
 }
 
 float introSmokeSignal(float time) { 
-    float introLength = 2.0;  
+    float introLength = 10.0;  
     // clamp(0.475 + 0.5 * sin( (3.0*3.141592653/2.0) + ( 2.0*3.141593653 / length ) * a ), 0.0, 1.0);
     return smoothstep(introLength - 1.0, introLength, time);
 }
@@ -355,7 +356,9 @@ vec3 rotatePoint(vec3 p, vec3 n, float theta) {
 
 vec2 mapPot (vec3 p, float time) { 
     // p = rotatePoint(p, vec3(0,1,0), -3.14159/6.0);
-    p = rotatePoint(p, vec3(0,1,0), -3.14159/8.0 + introSignal(uTime)*0.085*time*0.65*sin(-.89));
+    float rotateValue = -3.14159/8.0;
+
+    p = rotatePoint(p, vec3(0,1,0), -3.14159/8.0 + introSignalTime(uTime)*0.85*0.65*sin(-.89));
     p.y = -p.y;
 
     // material: 15 = metal body, 16 = coarse plastic for handles
@@ -672,7 +675,7 @@ vec3 render(in vec3 ro, in vec3 rd, in vec3 rdx, in vec3 rdy, float time) {
     float angleBetweenXZ = asin(nor.y) / 3.141592653;
     vec2 texCoords = 3.25 * vec2(angleBetweenXY, angleBetweenXZ); // close enough for sphere-like object
 
-    texCoords.x += introSignal(uTime)*0.085*time*0.65*sin(-.89);
+    texCoords.x += introSignalTime(uTime)*0.85*0.65*sin(-.89);
     // 0.65*sin(0.12*time)
 
     vec3 material = vec3(0);
