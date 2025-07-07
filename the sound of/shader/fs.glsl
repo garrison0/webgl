@@ -1,5 +1,5 @@
 #version 300 es
-#define AA 1
+#define AA 2
 
 precision highp float;
 
@@ -358,7 +358,7 @@ vec2 mapPot (vec3 p, float time) {
     // p = rotatePoint(p, vec3(0,1,0), -3.14159/6.0);
     float rotateValue = -3.14159/8.0;
 
-    p = rotatePoint(p, vec3(0,1,0), -3.14159/8.0 + introSignalTime(uTime)*0.85*0.65*sin(-.89));
+    p = rotatePoint(p, vec3(0,1,0), -3.14159/8.0 + introSignalTime(uTime)*1.7*7.8*sin(-.89));
     p.y = -p.y;
 
     // material: 15 = metal body, 16 = coarse plastic for handles
@@ -675,7 +675,7 @@ vec3 render(in vec3 ro, in vec3 rd, in vec3 rdx, in vec3 rdy, float time) {
     float angleBetweenXZ = asin(nor.y) / 3.141592653;
     vec2 texCoords = 3.25 * vec2(angleBetweenXY, angleBetweenXZ); // close enough for sphere-like object
 
-    texCoords.x += introSignalTime(uTime)*0.85*0.65*sin(-.89);
+    texCoords.x += introSignalTime(uTime)*1.7*7.8*sin(-.89);
     // 0.65*sin(0.12*time)
 
     vec3 material = vec3(0);
@@ -901,14 +901,14 @@ void main() {
     for (int n=0; n < AA; n++) { 
         vec2 o = (vec2(float(m), float(n)) / uResolution) / float(AA);
         vec2 p = vec2(aspect, 1.0) * ( (vUv+o) - vec2(0.5));
-        float time = uTime + 1.0 * (150.0/4.0) * float(m * n * AA) / float(AA*AA);
+        float time = uTime + 1.0 * (1.0/4.0) * float(m * n * AA) / float(AA*AA);
 #else
         vec2 p = vec2(aspect, 1.0) * (vUv - vec2(0.5));
         float time = uTime * 50.0;
 #endif
 
         // slow 
-        time *= 0.5;
+        time *= 0.0;
 
         // fast
         // time *= 2.5;
