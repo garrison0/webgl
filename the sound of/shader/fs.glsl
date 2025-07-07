@@ -1,5 +1,5 @@
 #version 300 es
-#define AA 2
+#define AA 1
 
 precision highp float;
 
@@ -34,6 +34,18 @@ float sizeSignal(float time) {
     float a = mod(time, length);
     float ap = clamp(0.475 + 0.5 * sin( (3.0*3.141592653/2.0) + ( 2.0*3.141593653 / length ) * a ), 0.0, 1.0);
     return ap;
+}
+
+float introSignal(float time) { 
+    float introLength = 2.0;  
+    // clamp(0.475 + 0.5 * sin( (3.0*3.141592653/2.0) + ( 2.0*3.141593653 / length ) * a ), 0.0, 1.0);
+    return smoothstep(introLength - 7.0*introLength/10.0, introLength, time);
+}
+
+float introSmokeSignal(float time) { 
+    float introLength = 2.0;  
+    // clamp(0.475 + 0.5 * sin( (3.0*3.141592653/2.0) + ( 2.0*3.141593653 / length ) * a ), 0.0, 1.0);
+    return smoothstep(introLength - 1.0, introLength, time);
 }
 
 /*
@@ -343,7 +355,7 @@ vec3 rotatePoint(vec3 p, vec3 n, float theta) {
 
 vec2 mapPot (vec3 p, float time) { 
     // p = rotatePoint(p, vec3(0,1,0), -3.14159/6.0);
-    p = rotatePoint(p, vec3(0,1,0), -3.14159/8.0 + 0.65*sin(0.069*time));
+    p = rotatePoint(p, vec3(0,1,0), -3.14159/8.0 + introSignal(uTime)*0.085*time*0.65*sin(-.89));
     p.y = -p.y;
 
     // material: 15 = metal body, 16 = coarse plastic for handles
@@ -358,7 +370,8 @@ vec2 mapPot (vec3 p, float time) {
 
     // spout
     res = opSmoothU(res, vec2(sdCappedCone(p + vec3(1.0,0.38,0.0), vec3(0,1,0), vec3(-0.5, 1.38, 0.0), 0.3, 0.19), 14.0),0.1);
-    res.x = opSmoothSubtraction(sdCappedCone(p + vec3(1.0,0.38,0.0), vec3(0,1,0), vec3(-0.5, 1.38, 0.0), 0.29, 0.18), res.x, 0.01);
+    // if i subtract the inside of the cone last, does that fix it?
+    // res.x = opSmoothSubtraction(sdCappedCone(p + vec3(1.0,0.38,0.0), vec3(0,1,0), vec3(-0.5, 1.38, 0.0), 0.28, 0.17), res.x, 0.01);
 
     // lid (base)
     float d = sdfSphere(p - vec3(0, 0.345, 0), 1.035);
@@ -408,21 +421,53 @@ vec2 mapPot (vec3 p, float time) {
 
     // ver 1: full pot
     {
-        float NoiseScale = 1.0391;
-        // pos -= vec3(0,4.5,0);
         
-        float ss = sizeSignal(time);
-        float NoiseIsoline = (0.04 + 0.23839919) * (smoothstep(3.9*ss, 0.75*ss, length(vec3(0,-1.05,0) + p)));
-        // float NoiseIsoline = 0.419 * (smoothstep(6.0, 2.0, p.y));
-        // float NoiseIsoline = 0.419;
-        p = (p / NoiseScale) - time * vec3(0,0.15,0);// - time;// * vec3(0,0.1,0);
-        // float noise = NoiseScale * (fbm(p) - NoiseIsoline);
+        // pos -= vec3(0,4.5,0);
+        // nice neutral/fake smoke:
+        
+        float signal = introSmokeSignal(uTime);
+        // if (signal > 0.00001) { 
+            // time *= signal;
+            float ss = sizeSignal(time);
+            // ss += 0.15;
+            ss *= signal;
+            // ss *= 2.0;
+            // ss *= introSmokeSignal(uTime);
+            float NoiseScale = .79; // 1.092382;
+            NoiseScale = 0.914;
 
-        float noise = NoiseScale * (fbm(p + 0.422*fbm( p + 0.05*vec3(1.99821,2.003,1.552)*time )) - NoiseIsoline);
-        // p.x -= noise;
+            
+            // if(signal < 0.001) { 
+            //     NoiseScale = 0.0;
+            // } else { 
+            //     NoiseScale = NoiseScale * 1.2 - (NoiseScale * 0.2 * signal);
+            // }
+            // NoiseScale = 1.2 - NoiseScale * 
+            // NoiseScale = max(0.5, introSmokeSignal(uTime));
 
-        // float d = sdCapsule(p, vec3(-2.0, 0.0, 0.0), vec3(-2.0,1.0,0.0)).x - ( 0.5 + 0.5 * ( sizeSignal(time)) ); // capsule // two capsules alternating?
-        return opSmoothU(res, vec2(noise, 15.0), 0.6);
+            // ??? color balls? - a nice blue?
+            // NoiseScale = 1.0 * max(0.1,ss);
+
+            // ???
+            // ss = 0.8;
+            // NoiseScale = max(0.15,cos(sin(0.01*time + cos(time*0.077))));
+
+            // ss = 1.0;
+            float NoiseIsoline = (0.04 + 0.23839919) * (smoothstep(3.9*ss, 0.75*ss, length(vec3(0,-2.25,0) + p)));
+            // float NoiseIsoline = 0.419 * (smoothstep(6.0, 2.0, p.y));
+            // float NoiseIsoline = 0.419;
+            p = signal*(p / NoiseScale) - time * vec3(0,0.15,0);// - time;// * vec3(0,0.1,0);
+            // float noise = NoiseScale * (fbm(p) - NoiseIsoline);
+
+            float noise = NoiseScale * (fbm(p + 0.422*fbm( p + 0.05*vec3(1.99821,2.003,1.552)*time )) - NoiseIsoline);
+            // p.x -= noise;
+
+            // float d = sdCapsule(p, vec3(-2.0, 0.0, 0.0), vec3(-2.0,1.0,0.0)).x - ( 0.5 + 0.5 * ( sizeSignal(time)) ); // capsule // two capsules alternating?
+            // return opSmoothU(res, vec2(noise, 15.0), 0.6); // return with metal texture
+            res = opSmoothU(res, vec2(noise, 40.0), 0.001 + signal*(0.55)); // return with metal texture
+                // add an extra .4-.6 to the K over the course of the song?? vary by ss???
+        // }
+        
     }
 
     // ver 2: line towards the side of the pot (original intention)
@@ -448,6 +493,11 @@ vec2 mapPot (vec3 p, float time) {
     // d = sdCapsule(p2, vec3(-0.6, 0.0, 0.0), vec3(0.6,0.6,0.0)).x - (0.75*(0.6 + 0.4*(1.0 - sizeSignal(time)))); // capsule // two capsules alternating?
     // res = opSmoothU(res, vec2(d, 15.0), 0.1);
 
+    res.x = opSmoothSubtraction(sdCappedCone(p2 + vec3(1.0,0.38,0.0), vec3(0,1,0), 1.1*vec3(-0.5, 1.28, 0.0), 0.275, 0.165), res.x, 0.01);
+
+    // put a ball or plate inside the spout to block the inner sphere?
+    res = opSmoothU(res, vec2(sdfSphere(p2 + vec3(1.0, -0.65, 0.0), 0.3), 50.0), 0.25);
+    
     return res;
 }
 
@@ -599,9 +649,17 @@ vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
 }
 
 vec3 render(in vec3 ro, in vec3 rd, in vec3 rdx, in vec3 rdy, float time) { 
-    vec3 col = vec3(0.0);
+    vec3 col = vec3(0.0); //background color
 
-    col = 0.95*vec3(.948,.9529,.9373);
+    // col = 0.95*vec3(.948,.9529,.9373);
+
+    if (rd.x < -0.13){
+        return col;
+    } else if (rd.x > 0.13) { 
+        return col;
+    } else if (rd.y < -0.26) { 
+        return col;
+    }
 
     vec2 res = raycast(ro,rd, time);
     float t = res.x;
@@ -614,7 +672,7 @@ vec3 render(in vec3 ro, in vec3 rd, in vec3 rdx, in vec3 rdy, float time) {
     float angleBetweenXZ = asin(nor.y) / 3.141592653;
     vec2 texCoords = 3.25 * vec2(angleBetweenXY, angleBetweenXZ); // close enough for sphere-like object
 
-    texCoords.x += 0.65*sin(time*0.069);
+    texCoords.x += introSignal(uTime)*0.085*time*0.65*sin(-.89);
     // 0.65*sin(0.12*time)
 
     vec3 material = vec3(0);
@@ -672,6 +730,19 @@ vec3 render(in vec3 ro, in vec3 rd, in vec3 rdx, in vec3 rdy, float time) {
     } else if (m < 31.) { 
         K = vec2(0.5, 16.0);
         material = vec3(0.8, 0.749, 0.7019);
+    } else if (m < 41.) {
+    // noise (when set to non-metal)
+        // fake smoke/steam (either one)
+        K = vec2(0.05, 1.0);
+        material = 2.6*vec3(0.98, 0.98, 0.98019);
+        // return vec3(1.0);
+        // color balls?
+        // K = vec2(0.05, 1.0);
+        // material = 1.5*vec3(0.68, 0.5, 0.99019);
+    } else if (m < 51.) {
+        // dark ball inside kettle spot to make it look better
+        material = texture(uMetalColor, 0.85 * pos.xy + texCoords).rgb;
+        return material * vec3(0.05);
     }
 
     // lighting
@@ -827,14 +898,14 @@ void main() {
     for (int n=0; n < AA; n++) { 
         vec2 o = (vec2(float(m), float(n)) / uResolution) / float(AA);
         vec2 p = vec2(aspect, 1.0) * ( (vUv+o) - vec2(0.5));
-        float time = uTime + 1.0 * (1.0/48.0) * float(m * n * AA) / float(AA*AA);
+        float time = uTime + 1.0 * (150.0/4.0) * float(m * n * AA) / float(AA*AA);
 #else
         vec2 p = vec2(aspect, 1.0) * (vUv - vec2(0.5));
-        float time = uTime;
+        float time = uTime * 50.0;
 #endif
 
         // slow 
-        time *= 0.125;
+        time *= 0.5;
 
         // fast
         // time *= 2.5;
