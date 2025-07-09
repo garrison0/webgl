@@ -1,5 +1,6 @@
 #version 300 es
 #define AA 1
+#define INTRO_LENGTH 1.1
 
 precision highp float;
 
@@ -37,14 +38,14 @@ float sizeSignal(float time) {
 }
 
 float introSignalTime(float time) { 
-    float introLength = 10.0;  
+    float introLength = INTRO_LENGTH;  
     float k = time < 0.5 * introLength ? 0.0 : 1.0;
     float v = time < introLength ? introLength * pow(time/introLength - 0.5, 2.0) : time - 0.75*introLength;
     return k * v;
 }
 
 float introSmokeSignal(float time) { 
-    float introLength = 10.0;  
+    float introLength = INTRO_LENGTH;  
     // clamp(0.475 + 0.5 * sin( (3.0*3.141592653/2.0) + ( 2.0*3.141593653 / length ) * a ), 0.0, 1.0);
     return smoothstep(introLength - 1.0, introLength, time);
 }
@@ -177,6 +178,17 @@ float snoise(vec3 v)
     m = m * m;
     return 105.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), 
                                     dot(p2,x2), dot(p3,x3) ) );
+}
+
+float turbulence( vec3 p ) {
+    float t = -.5;
+
+    for (float f = 1.0 ; f <= 10.0 ; f++ ){
+        float power = pow( 2.0, f );
+        t += abs( snoise( vec3( power * p ) ) / power );
+    }
+
+    return t;
 }
 
 const mat2 m2 = mat2( 0.60, -0.80, 0.80, 0.60 );
@@ -358,7 +370,7 @@ vec2 mapPot (vec3 p, float time) {
     // p = rotatePoint(p, vec3(0,1,0), -3.14159/6.0);
     float rotateValue = -3.14159/8.0;
 
-    p = rotatePoint(p, vec3(0,1,0), -3.14159/8.0 + introSignalTime(uTime)*0.85*0.65*sin(-.89));
+    p = rotatePoint(p, vec3(0,1,0), -3.14159/8.0 + introSignalTime(uTime)*0.45*0.65*sin(-.89));
     p.y = -p.y;
 
     // material: 15 = metal body, 16 = coarse plastic for handles
@@ -428,46 +440,48 @@ vec2 mapPot (vec3 p, float time) {
         // pos -= vec3(0,4.5,0);
         // nice neutral/fake smoke:
         
-        float signal = introSmokeSignal(uTime);
-        // if (signal > 0.00001) { 
-            // time *= signal;
-            float ss = sizeSignal(time);
-            // ss += 0.15;
-            ss *= signal;
-            // ss *= 2.0;
-            // ss *= introSmokeSignal(uTime);
-            float NoiseScale = .79; // 1.092382;
-            NoiseScale = 0.914;
+        // float signal = introSmokeSignal(uTime);
+        // signal *= smoothstep(INTRO_LENGTH, INTRO_LENGTH * 1.25, uTime);
+        // float localTime = uTime * 7.45;
+        // // if (signal > 0.00001) { 
+        //     // time *= signal;
+        //     float ss = 0.8 + 0.2*sizeSignal(localTime);
+        //     // ss += 0.15;
+        //     ss *= signal;
+        //     // ss *= 2.0;
+        //     // ss *= introSmokeSignal(uTime);
+        //     float NoiseScale = .79; // 1.092382;
+        //     NoiseScale = 0.914;
 
             
-            // if(signal < 0.001) { 
-            //     NoiseScale = 0.0;
-            // } else { 
-            //     NoiseScale = NoiseScale * 1.2 - (NoiseScale * 0.2 * signal);
-            // }
-            // NoiseScale = 1.2 - NoiseScale * 
-            // NoiseScale = max(0.5, introSmokeSignal(uTime));
+        //     // if(signal < 0.001) { 
+        //     //     NoiseScale = 0.0;
+        //     // } else { 
+        //     //     NoiseScale = NoiseScale * 1.2 - (NoiseScale * 0.2 * signal);
+        //     // }
+        //     // NoiseScale = 1.2 - NoiseScale * 
+        //     // NoiseScale = max(0.5, signal);
 
-            // ??? color balls? - a nice blue?
-            // NoiseScale = 1.0 * max(0.1,ss);
+        //     // ??? color balls? - a nice blue?
+        //     // NoiseScale = 1.0 * max(0.1,ss);
 
-            // ???
-            // ss = 0.8;
-            // NoiseScale = max(0.15,cos(sin(0.01*time + cos(time*0.077))));
+        //     // ???
+        //     // ss = 0.8;
+        //     // NoiseScale = max(0.15,cos(sin(0.01*time + cos(time*0.077))));
 
-            // ss = 1.0;
-            float NoiseIsoline = (0.04 + 0.23839919) * (smoothstep(3.9*ss, 0.75*ss, length(vec3(0,-2.25,0) + p)));
-            // float NoiseIsoline = 0.419 * (smoothstep(6.0, 2.0, p.y));
-            // float NoiseIsoline = 0.419;
-            p = signal*(p / NoiseScale) - time * vec3(0,0.15,0);// - time;// * vec3(0,0.1,0);
-            // float noise = NoiseScale * (fbm(p) - NoiseIsoline);
+        //     // ss = 1.0;
+        //     float NoiseIsoline = (0.04 + 0.23839919) * (smoothstep(3.9*ss, 0.75*ss, length(vec3(0,-2.25,0) + p)));
+        //     // float NoiseIsoline = 0.419 * (smoothstep(6.0, 2.0, p.y));
+        //     // float NoiseIsoline = 0.419;
+        //     p = signal*(p / NoiseScale) - localTime * vec3(0,0.15,0);// - localTime;// * vec3(0,0.1,0);
+        //     // float noise = NoiseScale * (fbm(p) - NoiseIsoline);
 
-            float noise = NoiseScale * (fbm(p + 0.422*fbm( p + 0.05*vec3(1.99821,2.003,1.552)*time )) - NoiseIsoline);
-            // p.x -= noise;
+        //     float noise = NoiseScale * (fbm(p + 0.422*fbm( p + 0.05*vec3(1.99821,2.003,1.552)*localTime )) - NoiseIsoline);
+        //     // p.x -= noise;
 
             // float d = sdCapsule(p, vec3(-2.0, 0.0, 0.0), vec3(-2.0,1.0,0.0)).x - ( 0.5 + 0.5 * ( sizeSignal(time)) ); // capsule // two capsules alternating?
             // return opSmoothU(res, vec2(noise, 15.0), 0.6); // return with metal texture
-            res = opSmoothU(res, vec2(noise, 40.0), 0.001 + signal*(0.55)); // return with metal texture
+            // res = opSmoothU(res, vec2(noise, 40.0), 0.001 + signal*(0.55)); // return with metal texture
                 // add an extra .4-.6 to the K over the course of the song?? vary by ss???
         // }
         
@@ -504,7 +518,37 @@ vec2 mapPot (vec3 p, float time) {
     return res;
 }
 
-vec2 map (vec3 p, float time) { 
+vec2 repeatedPot( vec3 p, float s, float time )
+{
+    vec3 r = p - s*round(p/s);
+    r.y = p.y;
+    return mapPot(r, time);
+}
+
+float repeatedBound( vec3 p, float s )
+{
+    vec3 r = p - s*round(p/s);
+    return sdfSphere(r, 2.85);
+    // return sdfSphere(r, 3.2);
+}
+
+vec2 mapOutlineBox (vec3 p, float time) { 
+    vec2 res = vec2(1e10, -1.0);
+    // define the box shape
+    // rotate xy then xz
+    vec3 new_p = p + vec3(0.0, -4.2, 1.0);
+    // float new_time = time*0.025;
+    // float new_time_2 = new_time * 0.88;
+    // new_p.xy = vec2(new_p.x*cos(new_time) - new_p.y*sin(new_time), new_p.x*sin(new_time) + new_p.y*cos(new_time));
+    // new_p.xz = vec2(new_p.x*cos(new_time_2) - new_p.z*sin(new_time_2), new_p.x*sin(new_time_2) + new_p.z*cos(new_time_2));
+    float dToBound = sdBox(new_p, 0.2*vec3(3.05, 1.75, 1.425));
+    // float dToBound = sdfSphere(p + vec3(0.0, -2.5, 20.0), 2.80);
+    res = opU(res, vec2(dToBound, 0.0));
+
+    return res;
+}
+
+vec2 mapBoxScene (vec3 p, float time) { 
     vec2 res = vec2(1e10, 0.0);
     float boxDistance = 5.0;
 
@@ -521,23 +565,73 @@ vec2 map (vec3 p, float time) {
     // p.y = -p.y;
 
     // float dToBound = sdfSphere(p + vec3(0.0, -1.15, 6.5), 8.80);
-    float dToBound = sdfSphere(p + vec3(0.0, -3.15, 15.0), 3.80);
-    // res = opU(res, vec2(dToBound, 30.0));
-    if (dToBound > 0.001) {
-        res = opU(res, vec2(dToBound, 30.0));
+    p.y += 2.35;
+    p.z += 30.0;
+    // 5.2
+    float repeatSpace = 6.8;
+    // float repeatSpace = 10.2;
+    // float repeatSpace = 40.0; // just for real time testing
+
+    vec3 id = round(p/repeatSpace);
+    
+    p.y += fbm(vec3(id.xz * 0.49, 0.0)) * 1.50;
+    p.x += fbm(vec3(id.yz * 0.15, 0.0)) * 1.5;
+    p.y += 1.0;
+    // p.y += vnoiseOctaves(id.xz, 1.0, 1.0);
+    float dToRepeatedBound = repeatedBound(p, repeatSpace);
+    // res = opU(res, vec2(dToRepeatedBound, 30.0));
+    if (dToRepeatedBound > 0.001) {
+        res = opU(res, vec2(dToRepeatedBound, 30.0));
     } else {  
-        res = opU(res, mapPot(p + vec3(0.0, -1.15, 15.0), time));
+        res = opU(res, repeatedPot(p, repeatSpace, time));
     }
+
+    // float dToBound = sdfSphere(p + vec3(0.0, -3.15, 15.0), 3.80);
+    // res = opU(res, vec2(dToBound, 30.0));
+    // if (dToBound > 0.001) {
+    //     res = opU(res, vec2(dToBound, 30.0));
+    // } else {  
+    //     res = opU(res, mapPot(p + vec3(0.0, -1.15, 15.0), time));
+    // }
     
     return res;
 }
 
-vec2 raycast (in vec3 ro, in vec3 rd, float time){
+// vec2 raycastOutlineBox (in vec3 ro, in vec3 rd, float time){
+//     vec2 res = vec2(1e10, -1.0);
+
+//     float tmin = 0.001;
+//     float tmax = 100.0;
+
+//     float eps = 0.00015;
+//     float t = tmin;
+//     for( int i = 0; i < 250 && t < tmax; i++) {
+//         vec2 h = mapOutlineBox( ro + rd*t, time );
+
+//         if( abs(h.x) < eps){
+//             res = vec2(t, h.y);
+//             break;
+//         } 
+
+//         t += h.x ;
+//     }
+
+//     return res;
+// }
+
+vec2 raycastBoxScene (in vec3 ro, in vec3 rd, float time){
     vec2 res = vec2(-1.0,-1.0);
 
     float tmin = 0.001;
-    float tmax = 100.0;
+    float tmax = 3500.0;
     
+    float tp1 = (-15.0-ro.y)/rd.y;
+    if( tp1 > 0.0 )
+    {
+        tmax = min( tmax, tp1 );
+        res = vec2( tp1, 0.0 );
+    }
+
     // raytrace floor plane
     // float tp1 = (-ro.y)/rd.y;
     // if( tp1 > 0.0 )
@@ -548,15 +642,15 @@ vec2 raycast (in vec3 ro, in vec3 rd, float time){
 
     float eps = 0.00015;
     float t = tmin;
-    for( int i = 0; i < 128 && t < tmax; i++) {
-        vec2 h = map( ro + rd*t, time );
+    for( int i = 0; i < 1828 && t < tmax; i++) {
+        vec2 h = mapBoxScene( ro + rd*t, time );
 
         if( abs(h.x) < eps){
             res = vec2(t, h.y);
             break;
         } 
 
-        t += h.x;
+        t += h.x*0.74;
     }
 
     return res;
@@ -580,13 +674,17 @@ vec2 raycast (in vec3 ro, in vec3 rd, float time){
 vec3 palette( in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d )
 {  return a + b*cos( 6.28318*(c*t+d) ); }
 
+vec3 pattern(float rdY, float time) {
+    return (0.5+0.5*cos(rdY*5.22))*0.8*vec3(0.996, 0.972, 0.964);
+}
+
 vec3 calcNormal( in vec3 p, float time )
 {
     const float eps = 0.0001; 
     const vec2 h = vec2(eps,0);
-    return normalize( vec3(map(p+h.xyy, time).x - map(p-h.xyy, time).x,
-                        map(p+h.yxy, time).x - map(p-h.yxy, time).x,
-                        map(p+h.yyx, time).x - map(p-h.yyx, time).x ) );
+    return normalize( vec3(mapBoxScene(p+h.xyy, time).x - mapBoxScene(p-h.xyy, time).x,
+                        mapBoxScene(p+h.yxy, time).x - mapBoxScene(p-h.yxy, time).x,
+                        mapBoxScene(p+h.yyx, time).x - mapBoxScene(p-h.yyx, time).x ) );
 }
 
 float calcAO( in vec3 pos, in vec3 nor, float time )
@@ -596,7 +694,7 @@ float calcAO( in vec3 pos, in vec3 nor, float time )
     for( int i=0; i<5; i++ )
     {
         float h = 0.01 + 0.12*float(i)/4.0;
-        float d = map( pos + h*nor, time ).x;
+        float d = mapBoxScene( pos + h*nor, time ).x;
         occ += (h-d)*sca;
         sca *= 0.95;
         if( occ>0.35 ) break;
@@ -609,7 +707,7 @@ float calcSoftshadow( in vec3 ro, in vec3 rd, float mint, float maxt, float k, f
     float res = 1.0;
     for( float t=mint; t<maxt; )
     {
-        float h = map(ro + rd*t, time).x;
+        float h = mapBoxScene(ro + rd*t, time).x;
         if( h< mint )
             return 0.0;
         res = min( res, k*h/t );
@@ -634,244 +732,451 @@ float calcSoftshadow( in vec3 ro, in vec3 rd, float mint, float maxt, float k, f
     lighting, raymarching. 
 */
 
+float waterMap ( vec2 p, float time ) {
+    mat2 m2 = mat2( 0.60, -0.80, 0.80, 0.60 );
+//    float2 pm = p * m2;
+    float a = 1.0 * (pow(fbm ( vec3(0.29 * p*m2, time * 0.15) ), 0.4));
+//    float b = 0.5 * abs ( fbm ( vec3(0.099 * p, time * 0.22) ) - 0.5 ) ;
+    float c = pow(1.0 * ( fbm ( vec3(0.66*p*m2, time * 0.15) ) ), 5.0) ;
+    return (0.9*a+0.1*c);
+}
+
+vec3 getWaterNormal ( vec3 pos, float time ) {
+    float BUMP_DISTANCE = 1000.0;
+    float bump_scale = 1.0 - smoothstep(0.0, BUMP_DISTANCE, abs(pos.z));
+
+    vec3 normal = vec3(0,0.5,0);
+    float eps = 0.002;
+    vec2 dx = vec2(eps, 0.0);
+    vec2 dz = vec2(0.0, eps);
+    normal.x = -bump_scale * 2.0 * (waterMap( pos.xz + dx, time ) - waterMap( pos.xz - dx, time )) / ( 2.0 * eps );
+    normal.z = -bump_scale * 2.0 * (waterMap( pos.xz + dz, time ) - waterMap( pos.xz - dz, time )) / ( 2.0 * eps );
+    normal = normalize(normal);
+    return normal;
+}
+
 
 vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
 {
-    vec3 col = 0.95*vec3(.948,.9529,.9373);
-    // float t = (20.0-ro.y)/rd.y;
-    // if( t>0.0 )
-    // {
-    //     vec3 pos = ro + t * rd;
-    //     pos = pos * 0.003; 
-    //     col = vec3(vnoiseOctaves(vec2(0.0, -uTime/50.) + pos.xz, 1.0, 0.5));
-    //     col = 0.1 + 0.6 * col + 0.3 * vec3(fbm(0.2*pos + vec3(-uTime/100., -uTime / 75., uTime/25.)));
-    //     col *= (1.0 / (pos.z*pos.z));
-    // }
+    // testing to fix water color --v
+    // return vec3(0.3,0.4,0.56)*0.3 - 0.3*rd.y;
+    // 64 is a nice base
+    // 30, 40 quite nice
+
+    // figure out a way to make the sky not move in jitters
+    // plus project the sky onto a sphere so it's more convincing
+    // rd.x *= 10.0;
+    time *= 10.0;
+    float realTime = time;
+    // time = 200.0;// + 5.432*(time * 0.0001 * glitchAmtFour(time)); // * sunsetAmt(time); //// + time * 0.00001;
+    // time = time;// + 0.25 * (0.5 + 0.5 * sin(0.545444*time));
+    // sunLig = normalize(sunLig);
+
+    vec3 col = vec3(0.3,0.4,0.56)*0.3 - 0.3*rd.y;
+
+    float t = (1000.0-ro.y)/rd.y;
+    // float t = (100.0 - length(ro)) / length(rd);
+    if( t>0.0 )
+    {
+        rd.x += 0.0;
+        vec3 vPos = (ro + t * rd);
+        vPos.xy += 0.01*time;
+        vPos.z -= 0.04*time;
+        vPos *= 0.511;
+        // pos.x += 1000.0;
+        vec3 pos = 1000.*rd.y*normalize(rd * t);
+
+        float sunFacing = 0.1 + 0.9*dot(sunLig,rd);
+        float tNoise = 2.5 * turbulence( 0.00001*vec3(1000.+1.1*pos.x + 0.01*time, rd.y *0.1 + 0.07 * time, 1000. -0.6*pos.x + 0.0 * time ) );
+        // float tNoise = 2.98 * turbulence( 0.000093*vec3(0.074*vPos.x + 0.5453, 0.4335*vPos.x - 12.22, vPos.z *0.066 + 1241.22) );
+
+        // get a 3d noise using the position, low frequency
+        // float b = -2.6*snoise( 0.0001 * vec3( pos.x + 0.2* time, rd.y * 0.001 * time, 10000. - pos.z *0.62+ 0.2 * time ) );
+        float b = -1.1*snoise( 0.00029 * ( 0.00007*vec3(888.11, 1000.0, -888.8) + 1.8 * vec3( 0.95*vPos.x + 0.05*time, vPos.x*0.02, vPos.z * 0.0016 ) ) );
+        
+        // compose both noises
+        float displacement = 2.2 * (+ 0.8 * b);
+
+        float fbmNoise = 0.07*fbm( 0.033 * vec3(vPos.z + 0.85, vPos.z*1.0, vPos.x));
+
+        // make a second noise with domain warped noise, b
+        // float displacementFBM = 7.5 * ( 0.2 * fbmNoise + 0.3 * b );
+
+        // interpolate between the two 
+        // float scalar = (0.5 + 0.5 * sin(realTime + sin(realTime))) / 3.0;
+        // float scalar2 = (0.5 + 0.5 * cos(sin(realTime - cos(realTime)))) / 3.0;
+        // float scalar3 = (0.5 + 0.5 * cos(realTime + cos(realTime))) / 3.0;
+
+        // vPos.xz *= 0.00019;
+
+        float vNoise = vnoiseOctaves(0.1*vec2(vPos.x * 0.00710, vPos.z * 0.00221411), 0.4919, 0.94);
+        vNoise = pow(vNoise, 1.0);
+        float pNoise = (0.333) * tNoise + (0.333) * fbmNoise + (0.233) * b + 0.93 * vNoise;
+        // float pNoise = 0.3 * vNoise + (0.333) * fbmNoise + (0.233) * b + 0.13;
+        
+        // float ratio = smoothstep(16500.0, 30500., -vPos.z);
+        // float ratio = 0.0;
+        // pNoise = (1.0 - ratio) * (0.7 * pNoise + 0.3 * vNoise) + (ratio) * (0.5*vNoise + 0.5 * pNoise * vNoise);
+        // pNoise = 0.35 * pNoise + 0.15 * vNoise;
+        // pNoise *= pNoise;
+
+        // col = palette( -0.1 * time + 0.25 * (displacement+ displacementFBM),
+        //     vec3(0.5,0.5,0.5),
+        //     vec3(0.5,0.5,0.5),
+        //     vec3(2.0,1.0,0.0),
+        //     vec3(0.5,0.2,0.25));
+        vec2 uv = (ro+t*rd).xz;
+        float cl = 1.0 * sin( (uv.y + 0.1 * sin(time) * abs(0.5 - uv.x)) * (0.0005 + 0.001 * time) );
+
+        col = palette( pNoise * 1.766,
+                    vec3(0.5,0.5,0.5),
+                    vec3(0.5,0.5,0.5),
+                    vec3(2.0,1.0,0.0),
+                    vec3(0.5,0.2,0.05) );
+
+        // col = mix( palette( pNoise + time * 0.25,
+        //             vec3(0.5,0.5,0.5),
+        //             vec3(0.5,0.5,0.5),
+        //             vec3(2.0,1.0,0.0),
+        //             vec3(0.45,0.15,0.05)), col, 0.01*rd.y);
+        
+        // col = palette( 1.666*pNoise,
+        //             vec3(0.5,0.5,0.5),
+        //             vec3(0.5,0.5,0.5),
+        //             vec3(2.0,1.0,0.0),
+        //             vec3(0.6,0.5,0.25) );
+
+        // if (vPos.z < -13500.) { 
+        //     col = vec3(1.0,1.0,1.0);
+        // }
+        // col.rg *= 0.9;
+        col.r *= 0.81;
+        col.g *= 1.1;
+        col.b *= 1.05;
+        // col.rgb *= 1.6 - (0.6 * sunsetAmt(realTime));
+        // col.b *= 0.45 + (0.55 * sunsetAmt(realTime));
+
+        // col *= 1.2 - 0.5 * sunsetAmt(realTime);
+        // col = 0.3 * col + normalize(col) * pow(length(col), 0.2) * 0.8;
+
+        col = mix( col, vec3(0.05,0.05,0.3), rd.y * 0.1 * cl);
+        // for glitch:
+        // col = mix( col, vec3(0.3,0.2,0.1), glitchAmtThree(uTime) * time * cl * uv.x * 0.1 );
+        // col = mix(mix(sin(col*time), col, rd.y * time * sin(cos(time * uv.y - uv.x))), col, 1.0-glitchAmtOne(uTime));
+    }
     
+    float sd = pow( clamp( 0.04 + 0.96*dot(sunLig,rd), 0.0, 1.0 ), 4.0 );
+    
+    // over time:
+    // set to -abs((60-55*sd))
+    // col = mix( col, vec3(0.2,0.25,0.30)*0.7, exp(-40.0*rd.y) ) ;
+
+    col = mix( col, vec3(1.0,0.30,0.05), sd*exp(-abs((16.0-(12.05*sd)))*rd.y) ) ;
+    col = mix( col, vec3(0.99,0.1,0.1)*2.0, exp((-35.0)*rd.y) ) ;
+
     return col;
 }
 
+vec3 waterColor (in vec3 pos, vec3 rd, vec3 sunLig, float time) {
+    vec3 baseColor = vec3(65.0/255.0, 102.0/255.0, 245.0/255.0);
+    
+    vec3 normal = getWaterNormal(pos, time);
+    // float shadow = calcSoftshadow(pos, sunLig, 0.01, 100.0, 1.0, time); // from the island
+    // shadow = pow(shadow, 1.2);
+
+    // manually add gradient around the island shadow because water had a strange cutoff on the shoreline
+    // shadow = min(1.0, (shadow) + smoothstep(13.0, 15.0, length(pos - (islandCenter() - vec3(8.0, 0.0, -13.0)))));
+
+    float ndotr = dot(normal, rd);
+    float fresnel = pow(1.0-abs(ndotr),5.);
+    fresnel = clamp(fresnel, 0.0 ,1.0);
+
+    vec3 skyReflect = skyColor(pos, reflect(rd, normal), sunLig, time);
+    skyReflect = skyReflect * skyReflect * (3.5 - 2.0 * skyReflect);
+    // skyReflect *= 0.001;
+    // skyReflect = clamp(skyReflect, 0.0, 1.0);
+    // skyReflect *= 0.0;
+
+    vec3 refClr = 0.6*fresnel*skyReflect;
+    // refClr = normalize(refClr);
+    // refClr = (refClr / 2.0) + vec3(0.3);
+    refClr = clamp(refClr, 0.0, 1.0);
+    // refClr = vec3(0.0);
+    vec3 col = 0.15*baseColor + 0.15 * 0.38 * baseColor + (0.1 * fresnel * refClr);
+    // col = normalize(col);
+    col *= 0.45 + 0.05 * baseColor;;
+    col *= 0.5;
+    col = clamp(col, 0.0, 1.0);
+    vec3 outcolor = 0.33*col + 0.66*col*(0.35+0.65*dot(normal,sunLig));
+    return clamp(outcolor, 0.0, 1.0);
+}
+
+// vec3 waterColor (vec3 pos, vec3 rd, vec3 sunLig, float time) {
+//     vec3 col = vec3(0.392, 0.583, 0.925);
+
+//     vec3 normal = getWaterNormal(pos - time*vec3(0.3, 0.01, 0.15), time);
+
+//     float ndotr = dot(normal, rd);
+//     float fresnel = pow(1.0-abs(ndotr),5.);
+
+//     vec3 skyReflect = skyColor(pos, reflect(rd, normal), sunLig, time);
+//     skyReflect = skyReflect * skyReflect * (3.5 - 2.0 * skyReflect);
+
+//     // vec3 skyReflect = pattern(reflect(rd, normal).y, time);
+//     // skyReflect = skyReflect * skyReflect * (3.0 - 2.0 * skyReflect);
+
+//     col = (0.45 * col + (0.1 * fresnel * skyReflect));
+//     return clamp(col * (0.35 + 0.65 * dot(normal, sunLig)), 0.0, 1.0);
+
+//     // col = (0.15 + .5 *  col) + (0.35 * fresnel * skyReflect);
+//     // return col * (0.38 *fresnel + 0.62 * pow(fresnel, 0.25) * dot(normal, sunLig));
+// }
+
 vec3 render(in vec3 ro, in vec3 rd, in vec3 rdx, in vec3 rdy, float time) { 
-    vec3 col = vec3(0.0); //background color
+    vec3 col = vec3(0.1,0.0,0.5); //background color within box
+    col = normalize(vec3(1.0, 0.6, 0.5)) * 0.5;
 
-    // col = 0.95*vec3(.948,.9529,.9373);
+    // vec2 res = raycastOutlineBox(ro,rd,time);
+    // float t = res.x;
+    // float m = res.y;
 
-    if (rd.x < -0.13){
-        return col;
-    } else if (rd.x > 0.13) { 
-        return col;
-    } else if (rd.y < -0.26) { 
-        return col;
-    }
+    vec3 new_ro = ro;
+    new_ro.z -= 1000.0 * cos(time * 0.001); 
+    // at 100sec, the z value breaks the render (not sure why) - so oscillate back n forth instead
 
-    vec2 res = raycast(ro,rd, time);
+    new_ro.x += 50.0*sin(time * 0.00087);
+    vec2 res = raycastBoxScene(new_ro,rd,time);
     float t = res.x;
     float m = res.y;
 
-    vec3 pos = ro + rd*t;
-    vec3 nor = calcNormal(pos, time);
+    // if (m >)
+    if (m > 1.0) { 
+        // vec3 new_ro = ro+rd*t;
+        // new_ro.z += time * 0.5;
+        // new_ro.x += 100.0*sin(time * 0.0001);
+        // res = raycastBoxScene(new_ro,rd,time);
 
-    float angleBetweenXY = asin(nor.x) / 3.141592653;
-    float angleBetweenXZ = asin(nor.y) / 3.141592653;
-    vec2 texCoords = 3.25 * vec2(angleBetweenXY, angleBetweenXZ); // close enough for sphere-like object
+        // t = res.x;
+        // m = res.y;
 
-    texCoords.x += introSignalTime(uTime)*0.85*0.65*sin(-.89);
-    // 0.65*sin(0.12*time)
+        vec3 pos = new_ro + rd*t;
+        vec3 nor = calcNormal(pos, time);
 
-    vec3 material = vec3(0);
-    vec2 K = vec2(0,1); // amount, power for specular
-    vec3 f0 = vec3(0.05);
-    float rou = 1.0; // roughness
-    vec3 hNor = vec3(0); // microfacet normal - is getting it from texture better than 'hal'? 
-    float a = 1.0;
+        float angleBetweenXY = asin(nor.x) / 3.141592653;
+        float angleBetweenXZ = asin(nor.y) / 3.141592653;
+        vec2 texCoords = 3.25 * vec2(angleBetweenXY, angleBetweenXZ); // close enough for sphere-like object
 
-    // MATERIALS
-    // 25 / 26 - walls
-    // 30 - ground
+        texCoords.x += introSignalTime(uTime)*0.45*0.65*sin(-.89);
+        // 0.65*sin(0.12*time)
 
-    // 14 - noise (silicon-ish)
-    // kettle - metal
-    if (m < 16.) {
-        if (m < 15.) { 
-            // spout - add detail 
-            angleBetweenXY = asin(nor.x) / 3.141592653;
-            angleBetweenXZ = asin(nor.y) / 3.141592653;
-            texCoords = 0.8 * vec2(angleBetweenXY, angleBetweenXZ);
-            material = 0.6 *texture(uMetalColor, 0.7 * pos.xy + 0.7*texCoords).rgb
-                    +  0.4 *texture(uMetalColor, 0.62 * pos.yz + 0.6*texCoords).rgb;
-            hNor = texture(uMetalNormal, 0.82 * pos.xy + 0.65*texCoords).rgb;
-            rou = texture(uMetalRough, 0.82 * pos.xy + 0.65*texCoords).r;
-        } else { 
-            material = 0.65*texture(uMetalColor, 0.35 * pos.xz + texCoords).rgb
-                +  0.35*texture(uMetalColor, 0.212 * pos.xy + texCoords).rgb;
-            hNor = texture(uMetalNormal, 0.7*texCoords).rgb;
-            rou = texture(uMetalRough, 0.7*texCoords).r;
+        vec3 material = vec3(0);
+        vec2 K = vec2(0,1); // amount, power for specular
+        vec3 f0 = vec3(0.05);
+        float rou = 1.0; // roughness
+        vec3 hNor = vec3(0); // microfacet normal - is getting it from texture better than 'hal'? 
+        float a = 1.0;
+
+        // MATERIALS
+        // 25 / 26 - walls
+        // 30 - ground
+
+        // 14 - noise (silicon-ish)
+        // kettle - metal
+        if (m < 16.) {
+            if (m < 15.) { 
+                // spout - add detail 
+                angleBetweenXY = asin(nor.x) / 3.141592653;
+                angleBetweenXZ = asin(nor.y) / 3.141592653;
+                texCoords = 0.8 * vec2(angleBetweenXY, angleBetweenXZ);
+                material = 0.6 *texture(uMetalColor, 0.7 * pos.xy + 0.7*texCoords).rgb
+                        +  0.4 *texture(uMetalColor, 0.62 * pos.yz + 0.6*texCoords).rgb;
+                hNor = texture(uMetalNormal, 0.82 * pos.xy + 0.65*texCoords).rgb;
+                rou = texture(uMetalRough, 0.82 * pos.xy + 0.65*texCoords).r;
+            } else { 
+                material = 0.65*texture(uMetalColor, 0.35 * pos.xz + texCoords).rgb
+                    +  0.35*texture(uMetalColor, 0.212 * pos.xy + texCoords).rgb;
+                hNor = texture(uMetalNormal, 0.7*texCoords).rgb;
+                rou = texture(uMetalRough, 0.7*texCoords).r;
+            }
+
+            K = vec2(0.85, 24.0);
+            f0 = vec3(.972, .961, .915);
+            a = 16.0 * (0.65 + 0.35 * (1.0 - rou));
+        // kettle - plastic
+        } else if (m < 17.) { 
+            K = vec2(0.65, 12.0);
+            material = 0.7*texture(uPlasticColor, pos.xy * 1.1).rgb
+                    +  0.3*texture(uPlasticColor, pos.yz * 1.25).rgb;
+            hNor = texture(uPlasticNormal, pos.xy * 1.5).rgb;
+            rou = texture(uPlasticRough, pos.xy * 1.5).r;
+
+            a = 12.0 * (1.0 - rou);
+            f0 = vec3(.042);
+        // wall - left
+        } else if (m < 26.) { 
+            K = vec2(0.05, 2.0);
+            material = vec3(.9608, .9686, .949);
+        // wall - right
+        } else if (m < 27.) { 
+            K = vec2(0.05, 2.0);
+            material = vec3(.9608, .9686, .949);
+        // floor
+        } else if (m < 31.) { 
+            K = vec2(0.5, 16.0);
+            material = vec3(0.8, 0.749, 0.7019);
+        } else if (m < 41.) {
+        // noise (when set to non-metal)
+            // fake smoke/steam (either one)
+            K = vec2(0.05, 1.0);
+            material = 2.6*vec3(0.98, 0.98, 0.98019);
+            // return vec3(1.0);
+            // color balls?
+            // K = vec2(0.05, 1.0);
+            // material = 1.5*vec3(0.68, 0.5, 0.99019);
+        } else if (m < 51.) {
+            // dark ball inside kettle spot to make it look better
+            material = texture(uMetalColor, 0.85 * pos.xy + texCoords).rgb;
+            return material * vec3(0.05);
         }
 
-        K = vec2(0.85, 24.0);
-        f0 = vec3(.972, .961, .915);
-        a = 16.0 * (0.65 + 0.35 * (1.0 - rou));
-    // kettle - plastic
-    } else if (m < 17.) { 
-        K = vec2(0.65, 12.0);
-        material = 0.7*texture(uPlasticColor, pos.xy * 1.1).rgb
-                +  0.3*texture(uPlasticColor, pos.yz * 1.25).rgb;
-        hNor = texture(uPlasticNormal, pos.xy * 1.5).rgb;
-        rou = texture(uPlasticRough, pos.xy * 1.5).r;
+        // lighting
+        if ( m > 0. ) { 
+            material *= 0.72 * material;
+            
+            float occ = calcAO(pos, nor, time);
+            a = 0.5*a + 0.5*((2.0 / pow(rou, 2.0)) - 2.0);
+            
+            float bou = clamp( 0.3-0.7*nor.y, 0.0, 1.0 );
+            vec3 ref = reflect( rd, nor );
+            vec3 lin = vec3(0);
 
-        a = 12.0 * (1.0 - rou);
-        f0 = vec3(.042);
-    // wall - left
-    } else if (m < 26.) { 
-        K = vec2(0.05, 2.0);
-        material = vec3(.9608, .9686, .949);
-    // wall - right
-    } else if (m < 27.) { 
-        K = vec2(0.05, 2.0);
-        material = vec3(.9608, .9686, .949);
-    // floor
-    } else if (m < 31.) { 
-        K = vec2(0.5, 16.0);
-        material = vec3(0.8, 0.749, 0.7019);
-    } else if (m < 41.) {
-    // noise (when set to non-metal)
-        // fake smoke/steam (either one)
-        K = vec2(0.05, 1.0);
-        material = 2.6*vec3(0.98, 0.98, 0.98019);
-        // return vec3(1.0);
-        // color balls?
-        // K = vec2(0.05, 1.0);
-        // material = 1.5*vec3(0.68, 0.5, 0.99019);
-    } else if (m < 51.) {
-        // dark ball inside kettle spot to make it look better
-        material = texture(uMetalColor, 0.85 * pos.xy + texCoords).rgb;
-        return material * vec3(0.05);
+            // indoor lighting 
+            // top - BRDF
+            {
+                vec3 lig = normalize(vec3(0.2,1.0,0.05));
+
+                float dif = clamp(dot(lig,nor), 0.0, 1.0);
+                dif *= occ;
+
+                vec3 hal  = normalize(lig - rd);
+                float fre = clamp(1.0 - dot(lig, hal), 0.0, 1.0);
+                // fre = 0.05 * fre + 0.95 * clamp(1.0 - dot(lig, hNor), 0.0, 1.0); // i like both qualities
+                float shadow = calcSoftshadow(pos, lig, 0.000001, 14.0, 6.0, time);
+                (m == 16.5) ? shadow = 1.0 : shadow = shadow;
+
+                vec3 clr = normalize(vec3(0.9, 0.633, 0.6));
+                // float speBias = smoothstep(0.3, 0.42, ref.y); // to make it seem more like an area light
+                // float speBias = 1.0; // or not
+                
+                // fresnel
+                vec3 fSch = f0 + (vec3(1) - f0)*pow(fre, 5.0);  
+                
+                // distribution
+                // float dBlinnPhong = ((a + 2.0) / (2.0*3.141592653)) * pow(clamp(dot(nor, hNor), 0.0, 1.0), a ); // more fake, 90s
+                float dBlinnPhong = ((a + 2.0) / (2.0*3.141592653)) * pow(clamp(dot(nor, hNor), 0.0, 1.0), a / 6.0); // more accurate - K.y is normally a
+
+                // full spectral light addition
+                vec3 spe = (fSch * dBlinnPhong) / 2.0;
+                lin += K.x * clr * 0.65 * spe * dif; // spec - add material, or not? shadow, or not?
+
+                lin += (1.0 - K.x) * 2.5 * dif * clr * shadow * shadow * material; // dif
+            }
+            //side 
+            {
+                vec3 lig = normalize(vec3(-0.5, 0.2, 0.1));
+                float dif = 0.1 + 0.9 * clamp(dot(lig, nor), 0.0, 1.0);
+                float shadow = calcSoftshadow(pos, lig, 0.000001, 14.0, 4.0, time);
+                (m == 16.5) ? shadow = 1.0 : shadow = shadow;
+                // shadow = pow(shadow, 0.5);
+                vec3 clr = vec3(1.0, 0.6, 0.5);
+                dif *= occ;
+
+                vec3 hal  = normalize(lig - rd);
+                float fre = clamp(1.0 - dot(lig, nor), 0.0, 1.0); 
+
+                vec3 spe = vec3(1)*(pow(clamp(dot(nor,hal), 0.0, 1.0), a / 2.0));
+                // spe *= 
+
+                vec3 fSch = f0 + (vec3(1) - f0)*pow(fre, 5.0);   
+                spe *= fSch;
+
+                // float dBlinnPhong = ((a + 2.0) / (2.0*3.141592653)) * pow(clamp(dot(nor, hal), 0.0, 1.0), a); 
+
+                // vec3 spe = (fSch * dBlinnPhong) / (4.0);
+                lin += K.x * 0.75 * clr * spe;
+
+                lin += (1.0 - K.x) * 3.0 * dif * shadow * shadow * material * clr;
+            }
+            // back (?)
+            // below - bounce
+            {
+                float spoutFix = clamp( dot(nor, normalize(vec3(-0.3, -0.5, 0.1))), 0.0, 1.0 );
+                lin += 4.5 * material * vec3(0.8,0.4,0.45) * spoutFix * occ + 2.0 * material * vec3(0.5,0.41,0.39) * bou * occ;
+            }
+            // sss
+            {
+                vec3 lig = normalize(vec3(0.2,1.0,0.05));
+                vec3 hal  = normalize(lig - rd);
+                float dif = clamp(dot(nor, hal), 0.0, 1.0);
+                float fre = clamp(1.0 - dot(lig, hal), 0.0, 1.0);
+                vec3 fSch = f0 + (vec3(1) - f0)*pow(fre, 5.0);   
+                lin += 3.5 * (1.0 - K.x) * fre * fre * (0.2 + 0.8 * dif * occ) * material;
+            }
+            
+            // sun
+            // {
+            //     float dif = clamp(dot(nor, hal), 0.0, 1.0);
+            //     dif *= shadow;
+            //     float spe = K.x * pow( clamp(dot(nor, hal), 0.0, 1.0), K.y );
+            //     spe *= dif;
+            //     spe *= 0.04+0.96*pow(clamp(1.0-dot(hal,lig),0.0,1.0),5.0); // fresnel
+            //     lin += material * (3.20) * dif * vec3(2.1,1.1,0.6);
+            //     lin += material * (3.) * spe * vec3(2.1,1.1,0.6);
+            // }
+            // // sky / reflections
+            // {
+            //     float dif = occ * sqrt(clamp(0.2 + 0.8 * nor.y, 0.0, 1.0));
+            //     vec3 skyCol = skyColor(pos, ref, lig, time);
+            //     lin += material * 0.6 * dif * (0.55 * clamp(skyCol, 0.0, 0.6));
+
+            //     float spe = smoothstep( -0.2, 0.2, ref.y );
+            //     spe *= dif;
+            //     spe *= occ * occ * K.x * 0.04 + 0.96 * pow( fre, 5.0 );
+            //     spe *= shadow; 
+            //     lin += 4.0 * spe * skyCol;
+            // }
+            // // ground / bounce light
+            // {
+            //     lin += 2.0 * material * vec3(0.5,0.41,0.39) * bou * occ;
+            // }
+            // // back
+            // {
+            // 	float dif = clamp( dot( nor, normalize(vec3(-0.5,0.0,-0.75))), 0.0, 1.0 )*clamp( 1.0-pos.y,0.0,1.0);
+            //           dif *= occ;
+            // 	lin += 2.0*material*0.55*dif*vec3(0.35,0.25,0.35);
+            // }
+            // // sss
+            // {
+            //     float dif = clamp(dot(nor, hal), 0.0, 1.0);
+            //     lin += 3.5 * fre * fre * (0.2 + 0.8 * dif * occ * shadow) * material;
+            // }
+            col = (0.05 * material) + (0.95 * lin); 
+        }
     }
-
-    // lighting
-    if ( m > 0. ) { 
-        material *= 0.72 * material;
-        
-        float occ = calcAO(pos, nor, time);
-        a = 0.5*a + 0.5*((2.0 / pow(rou, 2.0)) - 2.0);
-        
-        float bou = clamp( 0.3-0.7*nor.y, 0.0, 1.0 );
-        vec3 ref = reflect( rd, nor );
-        vec3 lin = vec3(0);
-
-        // indoor lighting 
-        // top - BRDF
-        {
-            vec3 lig = normalize(vec3(0.2,1.0,0.05));
-
-            float dif = clamp(dot(lig,nor), 0.0, 1.0);
-            dif *= occ;
-
-            vec3 hal  = normalize(lig - rd);
-            float fre = clamp(1.0 - dot(lig, hal), 0.0, 1.0);
-            // fre = 0.05 * fre + 0.95 * clamp(1.0 - dot(lig, hNor), 0.0, 1.0); // i like both qualities
-            float shadow = calcSoftshadow(pos, lig, 0.000001, 14.0, 6.0, time);
-            (m == 16.5) ? shadow = 1.0 : shadow = shadow;
-
-            vec3 clr = normalize(vec3(0.5, 0.633, 0.9));
-            // float speBias = smoothstep(0.3, 0.42, ref.y); // to make it seem more like an area light
-            // float speBias = 1.0; // or not
-            
-            // fresnel
-            vec3 fSch = f0 + (vec3(1) - f0)*pow(fre, 5.0);  
-            
-            // distribution
-            // float dBlinnPhong = ((a + 2.0) / (2.0*3.141592653)) * pow(clamp(dot(nor, hNor), 0.0, 1.0), a ); // more fake, 90s
-            float dBlinnPhong = ((a + 2.0) / (2.0*3.141592653)) * pow(clamp(dot(nor, hNor), 0.0, 1.0), a / 6.0); // more accurate - K.y is normally a
-
-            // full spectral light addition
-            vec3 spe = (fSch * dBlinnPhong) / 2.0;
-            lin += K.x * clr * 0.65 * spe * dif; // spec - add material, or not? shadow, or not?
-
-            lin += (1.0 - K.x) * 2.5 * dif * clr * shadow * shadow * material; // dif
-        }
-        //side 
-        {
-            vec3 lig = normalize(vec3(-0.5, 0.2, 0.1));
-            float dif = 0.1 + 0.9 * clamp(dot(lig, nor), 0.0, 1.0);
-            float shadow = calcSoftshadow(pos, lig, 0.000001, 14.0, 4.0, time);
-            (m == 16.5) ? shadow = 1.0 : shadow = shadow;
-            // shadow = pow(shadow, 0.5);
-            vec3 clr = vec3(1.0, 0.6, 0.5);
-            dif *= occ;
-
-            vec3 hal  = normalize(lig - rd);
-            float fre = clamp(1.0 - dot(lig, nor), 0.0, 1.0); 
-
-            vec3 spe = vec3(1)*(pow(clamp(dot(nor,hal), 0.0, 1.0), a / 2.0));
-            // spe *= 
-
-            vec3 fSch = f0 + (vec3(1) - f0)*pow(fre, 5.0);   
-            spe *= fSch;
-
-            // float dBlinnPhong = ((a + 2.0) / (2.0*3.141592653)) * pow(clamp(dot(nor, hal), 0.0, 1.0), a); 
-
-            // vec3 spe = (fSch * dBlinnPhong) / (4.0);
-            lin += K.x * 0.75 * clr * spe;
-
-            lin += (1.0 - K.x) * 3.0 * dif * shadow * shadow * material * clr;
-        }
-        // back (?)
-        // below - bounce
-        {
-            float spoutFix = clamp( dot(nor, normalize(vec3(-0.3, -0.5, 0.1))), 0.0, 1.0 );
-            lin += 4.5 * material * vec3(0.8,0.4,0.45) * spoutFix * occ + 2.0 * material * vec3(0.5,0.41,0.39) * bou * occ;
-        }
-        // sss
-        {
-            vec3 lig = normalize(vec3(0.2,1.0,0.05));
-            vec3 hal  = normalize(lig - rd);
-            float dif = clamp(dot(nor, hal), 0.0, 1.0);
-            float fre = clamp(1.0 - dot(lig, hal), 0.0, 1.0);
-            vec3 fSch = f0 + (vec3(1) - f0)*pow(fre, 5.0);   
-            lin += 3.5 * (1.0 - K.x) * fre * fre * (0.2 + 0.8 * dif * occ) * material;
-        }
-        
-        // sun
-        // {
-        //     float dif = clamp(dot(nor, hal), 0.0, 1.0);
-        //     dif *= shadow;
-        //     float spe = K.x * pow( clamp(dot(nor, hal), 0.0, 1.0), K.y );
-        //     spe *= dif;
-        //     spe *= 0.04+0.96*pow(clamp(1.0-dot(hal,lig),0.0,1.0),5.0); // fresnel
-        //     lin += material * (3.20) * dif * vec3(2.1,1.1,0.6);
-        //     lin += material * (3.) * spe * vec3(2.1,1.1,0.6);
-        // }
-        // // sky / reflections
-        // {
-        //     float dif = occ * sqrt(clamp(0.2 + 0.8 * nor.y, 0.0, 1.0));
-        //     vec3 skyCol = skyColor(pos, ref, lig, time);
-        //     lin += material * 0.6 * dif * (0.55 * clamp(skyCol, 0.0, 0.6));
-
-        //     float spe = smoothstep( -0.2, 0.2, ref.y );
-        //     spe *= dif;
-        //     spe *= occ * occ * K.x * 0.04 + 0.96 * pow( fre, 5.0 );
-        //     spe *= shadow; 
-        //     lin += 4.0 * spe * skyCol;
-        // }
-        // // ground / bounce light
-        // {
-        //     lin += 2.0 * material * vec3(0.5,0.41,0.39) * bou * occ;
-        // }
-        // // back
-        // {
-        // 	float dif = clamp( dot( nor, normalize(vec3(-0.5,0.0,-0.75))), 0.0, 1.0 )*clamp( 1.0-pos.y,0.0,1.0);
-        //           dif *= occ;
-        // 	lin += 2.0*material*0.55*dif*vec3(0.35,0.25,0.35);
-        // }
-        // // sss
-        // {
-        //     float dif = clamp(dot(nor, hal), 0.0, 1.0);
-        //     lin += 3.5 * fre * fre * (0.2 + 0.8 * dif * occ * shadow) * material;
-        // }
-
-        col = (0.05 * material) + (0.95 * lin);
-    } 
+    else if (m > -1.0) {
+        // ground color
+        // col = vec3(0.5);
+        vec3 sunLig = normalize(vec3(6.0, 1.7, -6.0) + 1.0 * vec3(2.0, -0.75, -2.0));
+        vec3 pos = new_ro + rd*t;
+        col = waterColor(pos * 0.2, rd, sunLig, time*0.02);
+        col = mix( col, vec3(0.99,0.1,0.1)*2.0, exp((30.0)*rd.y * 1.0) ) ;
+    }
+    else { 
+        // sky color
+        // col = vec3(0.0);
+        vec3 sunLig = normalize(vec3(6.0, 1.7, -6.0) + 1.0 * vec3(2.0, -0.75, -2.0));
+        col = skyColor(ro, rd, sunLig * 2.5, time);
+    }
     
     return vec3( clamp(col, 0.0, 1.0) );
 }
@@ -901,7 +1206,7 @@ void main() {
     for (int n=0; n < AA; n++) { 
         vec2 o = (vec2(float(m), float(n)) / uResolution) / float(AA);
         vec2 p = vec2(aspect, 1.0) * ( (vUv+o) - vec2(0.5));
-        float time = uTime + 1.0 * (150.0/4.0) * float(m * n * AA) / float(AA*AA);
+        float time = 50.0 * (uTime + (1.0/4.0) * float(m * n * AA) / float(AA*AA));
 #else
         vec2 p = vec2(aspect, 1.0) * (vUv - vec2(0.5));
         float time = uTime * 50.0;
@@ -909,6 +1214,10 @@ void main() {
 
         // slow 
         time *= 0.5;
+
+        // for testing:
+        // time *= 10.0;
+        // 10 * 10 = 100.... something breaks here in pot color render..
 
         // fast
         // time *= 2.5;

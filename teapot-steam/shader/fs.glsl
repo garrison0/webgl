@@ -656,6 +656,7 @@ vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
 
 vec3 render(in vec3 ro, in vec3 rd, in vec3 rdx, in vec3 rdy, float time) { 
     vec3 col = vec3(0.0); //background color
+    col = mix(0.02*vec3(0.5, 0.633, 0.9), 0.33*vec3(1.0, 0.38, 0.4), smoothstep(0.0, 1.0, 0.5+rd.y*2.0));
 
     // col = 0.95*vec3(.948,.9529,.9373);
 

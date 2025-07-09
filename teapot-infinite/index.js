@@ -37,7 +37,7 @@ function init()
                             name: "startTime-"+timeString,
                             verbose: true, 
                             startTime: Number(timeString)*24,
-                            timeLimit: 1000} );
+                            timeLimit: 10000} );
                                 // set to length of music video in seconds
                                 // - Number(timeString)*24} 
   let imgs = state.images;
