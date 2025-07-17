@@ -1,5 +1,5 @@
 #version 300 es
-#define AA 2 //# of anti-aliasing passes
+#define AA 1 //# of anti-aliasing passes
 
 precision highp float;
 
@@ -444,7 +444,7 @@ vec2 map (vec3 p, float time) {
     float z = 0.0;
     vec3 islandP = p + vec3(0,5.0, z+1.75);
     // glitch amt offset the size
-    res = vec2( sdbEllipsoid (islandP, (1.0 - (sin(glitchAmtOne(time) + sin(1.8*time*glitchAmtOne(time))) + 0.75 * glitchAmtOne(time))) * vec3(7.6, 2.15, 7.0)), 10.0 );
+    res = vec2( sdbEllipsoid (islandP, (1.0 - (0.1*sin(glitchAmtOne(time) + 0.11*sin(1.8*time*glitchAmtOne(time))) + 0.1 * glitchAmtOne(time))) * vec3(7.6, 2.15, 7.0)), 10.0 );
     res = opSmoothU ( vec2( sdBox (islandP, vec3(30.,0.5,30.)), 10.0), res, 3.0 );
 
     // palm tree w/ bounding volumes
@@ -581,6 +581,13 @@ vec3 skyColor( in vec3 ro, in vec3 rd, in vec3 sunLig, float time )
                     vec3(0.5,0.5,0.5),
                     vec3(2.0,1.0,0.0),
                     vec3(0.5,0.2,0.05) );
+
+        // trying to add wave effect
+        //float rz = 0.5*sin(vPos.x*.00016941+time*0.015*time) + 0.0*tan(vPos.x*0.0001963-time*0.005);
+        //rz = 1.0 / (1.0-rz);
+        //rz = rz * rz * 0.5;
+        //rz = max(0.3, rz);
+        //col = 0.95*col + 0.1*col * rz;
 
         // col = mix( palette( pNoise + time * 0.25,
         //             vec3(0.5,0.5,0.5),
@@ -728,7 +735,7 @@ vec2 raycast (in vec3 ro, in vec3 rd, float time){
 
     float eps = 0.00015;
     float t = tmin;
-    for( int i = 0; i < 128 && t < tmax; i++) {
+    for( int i = 0; i < 300 && t < tmax; i++) {
         vec2 h = map( ro + rd*t, time );
 
         if( abs(h.x) < eps){
@@ -736,7 +743,7 @@ vec2 raycast (in vec3 ro, in vec3 rd, float time){
             break;
         } 
 
-        t += h.x;
+        t += h.x * 0.95;
     }
 
     return res;
