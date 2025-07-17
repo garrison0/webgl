@@ -2,9 +2,19 @@ import * as twgl from './node_modules/twgl.js/dist/4.x/twgl-full.module.js';
 
 const gl = document.querySelector("#c").getContext("webgl2");
 var state = { mousePos: [0.5, 0.5] };
+var capturer;
 
 function init(preloaded, waterImage, grassImage, sandImage)
 {
+    capturer = new CCapture( { format: 'webm', 
+      framerate: 60, 
+      name: "startTime-"+Date.UTC(),
+      verbose: true, 
+      startTime: 0,
+      timeLimit: 2000} );
+          // set to length of music video in seconds
+          // - Number(timeString)*24} 
+
     state.programInfo = twgl.createProgramInfo(gl, [preloaded['vs'], preloaded['fs']]);
 
     state.bufferInfo = twgl.primitives.createXYQuadBufferInfo(gl);
@@ -42,6 +52,7 @@ function init(preloaded, waterImage, grassImage, sandImage)
     gl.clearColor(0.0,0.0,0.0,1.0);
 
     requestAnimationFrame(render);
+    capturer.start();
 }
 
 function render(time) { 
@@ -66,6 +77,7 @@ function render(time) {
     twgl.drawBufferInfo(gl, state.bufferInfo);
 
     requestAnimationFrame(render);
+    capturer.capture( gl.canvas );
 }
 
 

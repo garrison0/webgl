@@ -1,5 +1,5 @@
 #version 300 es
-#define AA 2 //# of anti-aliasing passes
+#define AA 1 //# of anti-aliasing passes
 
 precision highp float;
 
